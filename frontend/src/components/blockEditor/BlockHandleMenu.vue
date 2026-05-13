@@ -84,8 +84,9 @@ const turnIntoApplicable = computed(() => TURN_INTO_OK.has(props.nodeType))
 
 // Match the slash menu's block list — same icons, same set. Centralizing
 // these in a shared file is overkill for two consumers; we'll lift it if a
-// third caller appears.
-const turnIntoOptions = [
+// third caller appears. Wrapped in computed() to prevent re-creating the
+// array on every render, which could cause infinite reactive loops.
+const turnIntoOptions = computed(() => [
   { key: 'paragraph', icon: '¶',  title: t('blocks.items.paragraph') },
   { key: 'h1',        icon: 'H₁', title: t('blocks.items.h1') },
   { key: 'h2',        icon: 'H₂', title: t('blocks.items.h2') },
@@ -95,7 +96,7 @@ const turnIntoOptions = [
   { key: 'task',      icon: '☐',  title: t('blocks.items.task') },
   { key: 'quote',     icon: '❝',  title: t('blocks.items.quote') },
   { key: 'code',      icon: '⌨',  title: t('blocks.items.code') },
-]
+])
 
 function onTurnInto(opt) {
   emit('turnInto', opt.key)

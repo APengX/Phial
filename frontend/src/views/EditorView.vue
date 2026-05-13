@@ -18,7 +18,6 @@
       </div>
 
       <div class="modes">
-        <button :class="{ active: viewMode === 'blocks' }" @click="viewMode = 'blocks'">{{ t('editor.blocks') }}</button>
         <button :class="{ active: viewMode === 'source' }" @click="viewMode = 'source'">{{ t('editor.source') }}</button>
         <button :class="{ active: viewMode === 'split' }" @click="viewMode = 'split'">{{ t('editor.split') }}</button>
         <button :class="{ active: viewMode === 'preview' }" @click="viewMode = 'preview'">{{ t('editor.preview') }}</button>
@@ -45,12 +44,42 @@
         <button class="primary" :disabled="!dirty || saving" @click="save">
           {{ saving ? t('editor.saving') : t('editor.save') }}
         </button>
+        <button
+          v-if="viewMode === 'preview' || viewMode === 'split'"
+          class="ghost"
+          :class="{ active: editMode }"
+          @click="toggleEditMode"
+          :title="editMode ? t('editor.editModeActive') : t('editor.editModeInactive')"
+        >
+          {{ editMode ? '✓ ' + t('editor.editing') : '✎ ' + t('editor.edit') }}
+        </button>
         <button class="ghost icon-btn" @click="showAi = !showAi" title="AI">✦</button>
       </div>
     </header>
 
     <SettingsModal v-model="settingsOpen" @saved="onAgentSaved" />
     <ContextPicker v-model="ctxOpen" :path="currentPath" @changed="onCtxChanged" />
+
+    <!-- Edit element modal -->
+    <div v-if="editingElement" class="modal-overlay" @click.self="cancelEdit">
+      <div class="edit-modal">
+        <h3>{{ t('editor.editElement') }}</h3>
+        <p class="edit-hint">{{ t('editor.editHint', { tag: editingElement.tagName }) }}</p>
+        <textarea
+          ref="editTextarea"
+          v-model="editingElement.text"
+          class="edit-textarea"
+          rows="5"
+          @keydown.meta.enter="applyEdit"
+          @keydown.ctrl.enter="applyEdit"
+          @keydown.esc="cancelEdit"
+        ></textarea>
+        <div class="edit-actions">
+          <button class="ghost" @click="cancelEdit">{{ t('common.cancel') }}</button>
+          <button class="primary" @click="applyEdit">{{ t('editor.apply') }}</button>
+        </div>
+      </div>
+    </div>
 
     <div class="body">
       <!-- file tree -->
@@ -66,15 +95,8 @@
         />
       </aside>
 
-      <!-- center: blocks / source / preview / split -->
+      <!-- center: source / preview / split -->
       <main class="center">
-        <!-- Blocks view: visual rich-text editor. Interactive regions
-             (<script> + their owning markup) ride along as PhialWidget
-             blocks rendered in sandboxed mini-iframes — see PR 3. -->
-        <div v-if="viewMode === 'blocks'" class="pane blocks-pane">
-          <BlockEditor v-model="editorHtml" @save="save" />
-        </div>
-
         <div v-show="viewMode === 'source' || viewMode === 'split'" class="pane editor-pane" :class="{ half: viewMode === 'split' }">
           <HtmlEditor v-model="editorHtml" @save="save" />
         </div>
@@ -83,11 +105,14 @@
             :html="editorHtml"
             :settings="render"
             :pick-mode="pickMode"
+            :edit-mode="editMode"
             @state="onIfaceState"
             @to-agent="onIfaceToAgent"
             @event="onIfaceEvent"
             @pick="onPick"
             @pick-cancel="pickMode = false"
+            @edit="onEdit"
+            @edit-cancel="editMode = false"
           />
         </div>
       </main>
@@ -119,7 +144,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, defineAsyncComponent, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FileTree from '@/components/FileTree.vue'
@@ -151,6 +176,9 @@ const showAi = ref(true)
 const interfaceState = ref(null) // last state the rendered doc reported via window.phial
 const pickedElement = ref(null)  // element captured from the preview via "选元素"
 const pickMode = ref(false)
+const editMode = ref(false)      // edit mode: click elements in preview to edit their text
+const editingElement = ref(null) // element being edited { selector, text, tagName }
+const editTextarea = ref(null)
 const aiPanelRef = ref(null)
 
 const tree = ref(null)
@@ -364,6 +392,8 @@ function togglePick() {
   pickMode.value = !pickMode.value
   // make sure the user can see the preview when picking
   if (pickMode.value && viewMode.value === 'source') viewMode.value = 'split'
+  // disable edit mode when picking
+  if (pickMode.value && editMode.value) editMode.value = false
 }
 function onPick(data) {
   pickedElement.value = data || null
@@ -374,6 +404,52 @@ function onPick(data) {
     const ta = document.querySelector('.ai-input textarea')
     if (ta) ta.focus()
   })
+}
+
+// --- edit mode: click elements in preview to edit text -------------------
+function toggleEditMode() {
+  editMode.value = !editMode.value
+  // make sure the user can see the preview when editing
+  if (editMode.value && viewMode.value === 'source') viewMode.value = 'split'
+  // disable pick mode when editing
+  if (editMode.value && pickMode.value) pickMode.value = false
+}
+
+function onEdit(data) {
+  editingElement.value = { ...data }
+  editMode.value = false
+  // focus the textarea after it's mounted
+  nextTick(() => {
+    if (editTextarea.value) {
+      editTextarea.value.focus()
+      editTextarea.value.select()
+    }
+  })
+}
+
+function cancelEdit() {
+  editingElement.value = null
+  editMode.value = true
+}
+
+function applyEdit() {
+  if (!editingElement.value) return
+  const { selector, text } = editingElement.value
+  // Find and replace the text in the HTML
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(editorHtml.value, 'text/html')
+  const el = doc.querySelector(selector)
+  if (el) {
+    // Replace only direct text nodes, preserve child elements
+    for (let i = el.childNodes.length - 1; i >= 0; i--) {
+      const node = el.childNodes[i]
+      if (node.nodeType === 3) el.removeChild(node)
+    }
+    el.insertBefore(doc.createTextNode(text), el.firstChild)
+    editorHtml.value = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
+  }
+  editingElement.value = null
+  editMode.value = true
 }
 
 // --- the two-way loop with the rendered document (window.phial) ----------
@@ -475,4 +551,54 @@ onBeforeUnmount(() => {
 }
 .ai-resizer:hover { background: var(--accent-soft); }
 .resize-overlay { position: fixed; inset: 0; z-index: 998; cursor: col-resize; }
+
+/* Edit modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.edit-modal {
+  background: var(--bg-panel, #fff);
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+.edit-modal h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.edit-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-dim, #6b7280);
+}
+.edit-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 100px;
+}
+.edit-textarea:focus {
+  outline: none;
+  border-color: var(--accent, #6d28d9);
+}
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
 </style>

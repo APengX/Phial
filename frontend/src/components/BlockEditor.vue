@@ -392,19 +392,24 @@ function onHoverNodeChange({ node, pos }) {
 
 function openHandleMenu(ev) {
   if (hovered.value.pos < 0) return
+  ev.stopPropagation()
   const r = ev.currentTarget.getBoundingClientRect()
   handleMenu.top = r.bottom + 4
   handleMenu.left = r.left
   handleMenu.target = { ...hovered.value }   // freeze the block we're acting on
   handleMenu.open = true
-  // Click anywhere outside the menu closes it.
-  const off = (e) => {
-    if (e.target.closest('.blk-menu')) return
-    handleMenu.open = false
-    handleMenu.target = null
-    window.removeEventListener('mousedown', off, true)
-  }
-  setTimeout(() => window.addEventListener('mousedown', off, true), 0)
+  // Click anywhere outside the menu closes it. Use requestAnimationFrame to
+  // ensure the listener is added after the current click event has fully
+  // propagated, preventing the opening click from immediately closing the menu.
+  requestAnimationFrame(() => {
+    const off = (e) => {
+      if (!e.target || e.target.closest('.blk-menu')) return
+      handleMenu.open = false
+      handleMenu.target = null
+      window.removeEventListener('mousedown', off, true)
+    }
+    window.addEventListener('mousedown', off, true)
+  })
 }
 
 function withTargetNode(fn) {

@@ -19,9 +19,11 @@ const props = defineProps({
   // optional data pushed into the document (delivered to window.__phialOnData / 'phial:data' event)
   incomingData: { default: null },
   // when true, the next click in the iframe captures the clicked element
-  pickMode: { type: Boolean, default: false }
+  pickMode: { type: Boolean, default: false },
+  // when true, clicking elements in the iframe allows editing their text content
+  editMode: { type: Boolean, default: false }
 })
-const emit = defineEmits(['state', 'to-agent', 'event', 'ready', 'loaded', 'pick', 'pick-cancel'])
+const emit = defineEmits(['state', 'to-agent', 'event', 'ready', 'loaded', 'pick', 'pick-cancel', 'edit', 'edit-cancel'])
 
 const frame = ref(null)
 
@@ -53,6 +55,8 @@ const PHIAL_SHIM_CORE = `(function(){
       }
     } else if (d.type === 'pickMode') {
       d.on ? _startPick() : _stopPick();
+    } else if (d.type === 'editMode') {
+      d.on ? _startEdit() : _stopEdit();
     }
   });
 
@@ -146,6 +150,69 @@ const PHIAL_SHIM_CORE = `(function(){
     }
     return parts.join(' > ');
   }
+
+  // ---- edit mode (host toggles via postMessage type:'editMode') ------------
+  var _editOn = false, _editHover = null, _editPrevOutline = '', _editPrevOffset = '';
+  function _startEdit(){
+    if (_editOn) return;
+    _editOn = true;
+    document.body.style.cursor = 'text';
+    document.addEventListener('mouseover', _onEditHover, true);
+    document.addEventListener('mouseout', _onEditUnhover, true);
+    document.addEventListener('click', _onEditClick, true);
+    document.addEventListener('keydown', _onEditKey, true);
+  }
+  function _stopEdit(){
+    if (!_editOn) return;
+    _editOn = false;
+    _editUnhighlight();
+    document.body.style.cursor = '';
+    document.removeEventListener('mouseover', _onEditHover, true);
+    document.removeEventListener('mouseout', _onEditUnhover, true);
+    document.removeEventListener('click', _onEditClick, true);
+    document.removeEventListener('keydown', _onEditKey, true);
+  }
+  function _editHighlight(el){
+    if (_editHover === el) return;
+    _editUnhighlight();
+    _editHover = el;
+    _editPrevOutline = el.style.outline;
+    _editPrevOffset = el.style.outlineOffset;
+    el.style.outline = '2px dashed #10b981';
+    el.style.outlineOffset = '1px';
+  }
+  function _editUnhighlight(){
+    if (!_editHover) return;
+    _editHover.style.outline = _editPrevOutline;
+    _editHover.style.outlineOffset = _editPrevOffset;
+    _editHover = null;
+  }
+  function _onEditHover(e){
+    var t = e.target;
+    if (t && t.nodeType === 1 && t !== document.body && t !== document.documentElement) _editHighlight(t);
+  }
+  function _onEditUnhover(e){ if (e.target === _editHover) _editUnhighlight(); }
+  function _onEditClick(e){
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    var el = e.target;
+    var text = _getEditableText(el);
+    var selector = _selector(el);
+    _editUnhighlight();
+    send({type:'edit', data: { selector: selector, text: text, tagName: el.tagName }});
+  }
+  function _onEditKey(e){
+    if (e.key === 'Escape') { _stopEdit(); send({type:'editCancel'}); }
+  }
+  function _getEditableText(el){
+    // Get direct text content, excluding nested elements
+    var text = '';
+    for (var i = 0; i < el.childNodes.length; i++) {
+      var node = el.childNodes[i];
+      if (node.nodeType === 3) text += node.nodeValue;
+    }
+    return text.trim();
+  }
 })();`
 const PHIAL_SHIM = '<script>' + PHIAL_SHIM_CORE + CLOSE_SCRIPT
 
@@ -199,6 +266,8 @@ function onFrameLoad() {
   if (props.incomingData != null) pushData(props.incomingData)
   // re-arm pick mode after a re-render if the host still wants it on
   if (props.pickMode) sendPickMode(true)
+  // re-arm edit mode after a re-render if the host still wants it on
+  if (props.editMode) sendEditMode(true)
 }
 
 function onMessage(e) {
@@ -211,11 +280,21 @@ function onMessage(e) {
   else if (d.type === 'ready') emit('ready')
   else if (d.type === 'pick') emit('pick', d.data)
   else if (d.type === 'pickCancel') emit('pick-cancel')
+  else if (d.type === 'edit') emit('edit', d.data)
+  else if (d.type === 'editCancel') emit('edit-cancel')
 }
 
 function sendPickMode(on) {
   try {
     frame.value?.contentWindow?.postMessage({ __phialHost: true, type: 'pickMode', on: !!on }, '*')
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function sendEditMode(on) {
+  try {
+    frame.value?.contentWindow?.postMessage({ __phialHost: true, type: 'editMode', on: !!on }, '*')
   } catch (e) {
     /* ignore */
   }
@@ -229,6 +308,7 @@ onBeforeUnmount(() => window.removeEventListener('message', onMessage))
 watch(() => [props.html, props.settings.allowScripts, props.settings.allowExternal], render)
 watch(() => props.incomingData, (v) => { if (v != null) pushData(v) })
 watch(() => props.pickMode, sendPickMode)
+watch(() => props.editMode, sendEditMode)
 
 defineExpose({ pushData })
 </script>

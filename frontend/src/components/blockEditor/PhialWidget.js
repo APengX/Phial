@@ -53,9 +53,10 @@ export const PhialWidget = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    // Empty content (`[]`) — atom nodes have no body. Merge `data-html` from
-    // addAttributes with the marker attr the parser keys off.
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-phial-widget': 'true' }), []]
+    // Atom nodes have no editable content, so we omit the content slot (third
+    // element). Merge `data-html` from addAttributes with the marker attr the
+    // parser keys off.
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-phial-widget': 'true' })]
   },
 
   addNodeView() {
