@@ -62,6 +62,10 @@
           <span class="d-icon">📄</span>
           <span class="d-title">{{ d.title || d.name }}</span>
           <span class="d-path muted">{{ d.path }}</span>
+          <span class="d-acts">
+            <button class="d-act" :title="t('editor.rename')" @click.stop="renameDoc(d)">✎</button>
+            <button class="d-act danger" :title="t('editor.delete')" @click.stop="removeDoc(d)">🗑</button>
+          </span>
           <span class="d-time muted">{{ fmtTime(d.mtime) }}</span>
         </li>
       </ul>
@@ -74,7 +78,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getWorkspace, setWorkspace } from '@/api/workspace'
-import { listDocuments, createDocument, getDocument } from '@/api/documents'
+import { listDocuments, createDocument, getDocument, deleteDocument, renameDocument } from '@/api/documents'
 import { pushToast } from '@/composables/useToast'
 import { EXAMPLES } from '@/examples'
 import SettingsModal from '@/components/SettingsModal.vue'
@@ -162,6 +166,29 @@ async function useExample(ex) {
   }
 }
 
+async function removeDoc(d) {
+  if (!window.confirm(t('editor.confirmDelete', { name: d.title || d.name || d.path }))) return
+  try {
+    await deleteDocument(d.path)
+    pushToast(t('editor.delete') + ' ✓', 'success')
+    docs.value = await listDocuments()
+  } catch (e) {
+    pushToast(e.message, 'error')
+  }
+}
+
+async function renameDoc(d) {
+  const dst = window.prompt(t('editor.renamePrompt'), d.path)
+  if (!dst || dst === d.path) return
+  try {
+    await renameDocument(d.path, dst)
+    pushToast(t('editor.rename') + ' ✓', 'success')
+    docs.value = await listDocuments()
+  } catch (e) {
+    pushToast(e.message, 'error')
+  }
+}
+
 function open(path) {
   router.push({ name: 'editor', query: { path } })
 }
@@ -226,8 +253,16 @@ h1 { margin: 0; font-size: 24px; }
   border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; background: var(--bg-panel);
 }
 .doc-list li:hover { border-color: var(--accent); background: #faf5ff; }
-.d-icon { font-size: 15px; }
-.d-title { font-weight: 500; }
-.d-path { font-family: var(--mono); font-size: 11.5px; }
-.d-time { margin-left: auto; font-size: 11.5px; white-space: nowrap; }
+.d-icon { font-size: 15px; flex: none; }
+.d-title { font-weight: 500; flex: none; }
+.d-path { font-family: var(--mono); font-size: 11.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-acts { margin-left: auto; display: flex; gap: 2px; flex: none; opacity: 0; }
+.doc-list li:hover .d-acts { opacity: 1; }
+.d-act {
+  border: 0; background: transparent; padding: 2px 6px; font-size: 12px; line-height: 1;
+  border-radius: 5px; color: var(--text-dim);
+}
+.d-act:hover { background: var(--bg-soft); color: var(--text); }
+.d-act.danger:hover { background: #fef2f2; color: var(--danger); }
+.d-time { font-size: 11.5px; white-space: nowrap; flex: none; }
 </style>

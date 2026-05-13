@@ -75,9 +75,20 @@ KNOWN_AGENTS = [
 
 _BY_ID = {a["id"]: a for a in KNOWN_AGENTS}
 
+# Env vars Phial is willing to forward into a CLI agent subprocess: only the keys
+# we explicitly surface in env_hints. Anything else (NODE_OPTIONS, LD_PRELOAD,
+# DYLD_*, PATH, ...) is dropped — those let a caller turn "set my API key" into
+# arbitrary code execution in the child process.
+ALLOWED_ENV_KEYS = frozenset(h["key"] for a in KNOWN_AGENTS for h in a["env_hints"])
+
 
 def find(agent_id: str) -> Optional[dict]:
     return _BY_ID.get(agent_id)
+
+
+def filter_env(env: Optional[dict]) -> dict:
+    """Keep only allow-listed keys, coerced to str -> str."""
+    return {str(k): str(v) for k, v in (env or {}).items() if str(k) in ALLOWED_ENV_KEYS}
 
 
 def _probe_version(path: str, args: List[str]) -> Optional[str]:

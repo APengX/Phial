@@ -59,6 +59,8 @@
           :open-set="openSet"
           @select="selectDoc"
           @toggle="toggleFolder"
+          @delete="deleteFromTree"
+          @rename="renameFromTree"
         />
       </aside>
 
@@ -68,37 +70,40 @@
           <HtmlEditor v-model="editorHtml" @save="save" />
         </div>
         <div v-show="viewMode !== 'source'" class="pane preview-pane" :class="{ half: viewMode === 'split' }">
-          <div v-if="previewOverride !== null" class="ai-banner">
-            {{ t('ai.previewNote') }}
-            <span class="spacer"></span>
-            <button class="primary" @click="acceptAiPreview">{{ t('ai.apply') }}</button>
-            <button class="ghost" @click="previewOverride = null">{{ t('ai.discard') }}</button>
-          </div>
           <SandboxPreview
-            :html="previewHtml"
+            :html="editorHtml"
             :settings="render"
+            :pick-mode="pickMode"
             @state="onIfaceState"
             @to-agent="onIfaceToAgent"
             @event="onIfaceEvent"
+            @pick="onPick"
+            @pick-cancel="pickMode = false"
           />
         </div>
       </main>
 
       <!-- AI panel -->
-      <aside v-show="showAi" class="ai-side">
+      <aside v-show="showAi" class="ai-side" :style="{ width: aiWidth + 'px', minWidth: aiWidth + 'px' }">
+        <div class="ai-resizer" :title="t('editor.dragWidth')" @mousedown.prevent="startAiResize"></div>
         <AiPanel
           ref="aiPanelRef"
           :current-html="editorHtml"
           :path="currentPath"
           :interface-state="interfaceState"
+          :picked-element="pickedElement"
+          :pick-mode="pickMode"
           :disabled="!agentReady"
           :disabled-reason="agent.label || t('home.llmMissing')"
-          @preview="onAiPreview"
           @apply="onAiApply"
           @clear-state="interfaceState = null"
+          @toggle-pick="togglePick"
+          @clear-picked="pickedElement = null"
         />
       </aside>
     </div>
+
+    <div v-if="aiResizing" class="resize-overlay"></div>
   </div>
 </template>
 
@@ -127,8 +132,9 @@ const saving = ref(false)
 const viewMode = ref('split')
 const showTree = ref(true)
 const showAi = ref(true)
-const previewOverride = ref(null)
 const interfaceState = ref(null) // last state the rendered doc reported via window.phial
+const pickedElement = ref(null)  // element captured from the preview via "选元素"
+const pickMode = ref(false)
 const aiPanelRef = ref(null)
 
 const tree = ref(null)
@@ -137,9 +143,16 @@ const render = ref({ allowScripts: true, allowExternal: false })
 const agent = ref({ label: '', ready: true })
 const settingsOpen = ref(false)
 
+// resizable AI panel
+const AI_MIN = 300
+const AI_MAX = 760
+const clampAiWidth = (w) => Math.max(AI_MIN, Math.min(AI_MAX, Number(w) || 380))
+const aiWidth = ref(clampAiWidth(localStorage.getItem('phial.aiWidth')))
+const aiResizing = ref(false)
+let aiResizeStart = null
+
 const dirty = computed(() => editorHtml.value !== savedHtml.value)
 const agentReady = computed(() => agent.value.ready !== false)
-const previewHtml = computed(() => (previewOverride.value !== null ? previewOverride.value : editorHtml.value))
 
 async function loadWorkspace() {
   try {
@@ -181,8 +194,9 @@ async function loadDoc() {
     doc.value = d
     editorHtml.value = d.html
     savedHtml.value = d.html
-    previewOverride.value = null
     interfaceState.value = null
+    pickedElement.value = null
+    pickMode.value = false
   } catch (e) {
     pushToast(e.message, 'error')
     goHome()
@@ -250,24 +264,69 @@ async function del() {
   }
 }
 
+// --- file-tree row actions (any doc/folder, not just the open one) -------
+function isOpenDocOrAncestor(path) {
+  return currentPath.value === path || currentPath.value.startsWith(path + '/')
+}
+
+async function deleteFromTree(node) {
+  const isDir = node.type === 'dir'
+  const msg = isDir
+    ? t('editor.confirmDeleteDir', { name: node.name })
+    : t('editor.confirmDelete', { name: node.title || node.name })
+  if (!window.confirm(msg)) return
+  try {
+    await deleteDocument(node.path)
+    pushToast(t('editor.delete') + ' ✓', 'success')
+    if (isOpenDocOrAncestor(node.path)) {
+      goHome()
+      return
+    }
+    await loadTree()
+  } catch (e) {
+    pushToast(e.message, 'error')
+  }
+}
+
+async function renameFromTree(node) {
+  const dst = window.prompt(t('editor.renamePrompt'), node.path)
+  if (!dst || dst === node.path) return
+  try {
+    const d = await renameDocument(node.path, dst)
+    await loadTree()
+    if (currentPath.value === node.path) router.replace({ name: 'editor', query: { path: d.path } })
+  } catch (e) {
+    pushToast(e.message, 'error')
+  }
+}
+
 function openInBrowser() {
   window.open('/api/documents/raw?path=' + encodeURIComponent(currentPath.value), '_blank')
 }
 
-function onAiPreview(html) {
-  previewOverride.value = html // null clears it
-  if (html && viewMode.value === 'source') viewMode.value = 'split'
-}
-
+// AI result lands straight in the editor (dirty, not saved — review & Cmd+S).
 function onAiApply(html) {
+  if (html == null || html === editorHtml.value) return
   editorHtml.value = html
-  previewOverride.value = null
   interfaceState.value = null
-  save()
+  if (viewMode.value === 'source') viewMode.value = 'split'
 }
 
-function acceptAiPreview() {
-  if (previewOverride.value !== null) onAiApply(previewOverride.value)
+// --- pick element from the preview ---------------------------------------
+function togglePick() {
+  pickMode.value = !pickMode.value
+  // make sure the user can see the preview when picking
+  if (pickMode.value && viewMode.value === 'source') viewMode.value = 'split'
+}
+function onPick(data) {
+  pickedElement.value = data || null
+  pickMode.value = false
+  showAi.value = true
+  // give focus to the AI prompt so they can immediately type the change
+  requestAnimationFrame(() => {
+    const ta = document.querySelector('.ai-input textarea')
+    if (ta) ta.focus()
+  })
 }
 
 // --- the two-way loop with the rendered document (window.phial) ----------
@@ -284,6 +343,24 @@ function onIfaceToAgent({ text, data }) {
 
 function onIfaceEvent({ name }) {
   if (name) pushToast('界面事件: ' + name, 'info', 1800)
+}
+
+function startAiResize(e) {
+  aiResizeStart = { x: e.clientX, w: aiWidth.value }
+  aiResizing.value = true
+  window.addEventListener('mousemove', onAiResize)
+  window.addEventListener('mouseup', endAiResize)
+}
+function onAiResize(e) {
+  if (!aiResizeStart) return
+  aiWidth.value = clampAiWidth(aiResizeStart.w + (aiResizeStart.x - e.clientX))
+}
+function endAiResize() {
+  aiResizeStart = null
+  aiResizing.value = false
+  window.removeEventListener('mousemove', onAiResize)
+  window.removeEventListener('mouseup', endAiResize)
+  localStorage.setItem('phial.aiWidth', String(aiWidth.value))
 }
 
 function goHome() {
@@ -304,7 +381,11 @@ onMounted(async () => {
   await loadTree()
   await loadDoc()
 })
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  window.removeEventListener('mousemove', onAiResize)
+  window.removeEventListener('mouseup', endAiResize)
+})
 </script>
 
 <style scoped>
@@ -340,11 +421,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 .editor-pane { flex: 1; border-right: 1px solid var(--border); }
 .preview-pane { flex: 1; display: flex; flex-direction: column; background: #fff; }
 .pane.half { flex: 1 1 50%; width: 50%; }
-.ai-side { width: 360px; min-width: 360px; border-left: 1px solid var(--border); }
-
-.ai-banner {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px;
-  background: #fdf4ff; border-bottom: 1px solid var(--border); color: #6b21a8;
+.ai-side { width: 380px; min-width: 380px; border-left: 1px solid var(--border); position: relative; }
+.ai-resizer {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 6;
 }
-.ai-banner .spacer { flex: 1; }
+.ai-resizer:hover { background: var(--accent-soft); }
+.resize-overlay { position: fixed; inset: 0; z-index: 998; cursor: col-resize; }
 </style>

@@ -25,10 +25,12 @@
     "rename": "重命名",
     "delete": "删除",
     "confirmDelete": "确定删除「{name}」？此操作不可撤销。",
+    "confirmDeleteDir": "删除文件夹「{name}」及其中所有内容？此操作不可撤销。",
     "renamePrompt": "新文档路径：",
     "interactive": "运行文档内 JS",
     "external": "允许外部资源(CDN)",
     "openInBrowser": "用浏览器打开",
+    "dragWidth": "拖动调整面板宽度",
     "stateBadge": "界面状态"
   },
   "ai": {
@@ -36,7 +38,7 @@
     "placeholder": "描述你想要的内容，或要怎么修改这篇文档…",
     "send": "生成",
     "stop": "停止",
-    "applying": "生成中…",
+    "applying": "生成中",
     "apply": "应用到文档",
     "discard": "放弃",
     "previewNote": "下面是 AI 生成的结果，预览已切换为该内容；点「应用到文档」写入并保存。",
@@ -45,7 +47,11 @@
     "hintNew": "新文档 —— 描述你想要的内容或界面。",
     "hintEdit": "基于当前文档 —— 告诉 AI 怎么改。",
     "stateCaptured": "已捕获界面状态，将随消息一起发给 AI",
-    "stateAttached": "已附带界面状态"
+    "stateAttached": "已附带界面状态",
+    "pick": "选元素",
+    "pickElement": "在预览里点要修改的元素（再按一次或按 Esc 取消）",
+    "pickAttached": "已选中 {tag}",
+    "clearPicked": "取消选中"
   },
   "settings": {
     "title": "设置 · Agent",

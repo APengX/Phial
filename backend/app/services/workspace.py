@@ -5,6 +5,7 @@ changed at runtime and is persisted to ~/.phial/settings.json.
 """
 
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -186,14 +187,20 @@ class Workspace:
 
     @classmethod
     def delete_doc(cls, rel_path: str) -> None:
+        """Delete a document, or a folder and everything inside it."""
         target = cls.resolve(rel_path, must_exist=True)
+        if target == cls.root():
+            raise WorkspaceError("不能删除工作区根目录")
         if target.is_dir():
-            raise WorkspaceError("不能用此接口删除文件夹")
-        target.unlink()
+            shutil.rmtree(target)
+        else:
+            target.unlink()
 
     @classmethod
     def rename_doc(cls, src: str, dst: str) -> dict:
         src_p = cls.resolve(src, must_exist=True)
+        if src_p.is_dir():
+            raise WorkspaceError("不能用此接口重命名文件夹")
         dst_p = cls.resolve(dst)
         if dst_p.suffix.lower() not in DOC_SUFFIXES:
             dst_p = dst_p.with_suffix(".html")

@@ -25,10 +25,12 @@
     "rename": "Rename",
     "delete": "Delete",
     "confirmDelete": "Delete \"{name}\"? This cannot be undone.",
+    "confirmDeleteDir": "Delete folder \"{name}\" and everything in it? This cannot be undone.",
     "renamePrompt": "New document path:",
     "interactive": "Run in-doc JS",
     "external": "Allow external resources (CDN)",
     "openInBrowser": "Open in browser",
+    "dragWidth": "Drag to resize the panel",
     "stateBadge": "interface state"
   },
   "ai": {
@@ -36,7 +38,7 @@
     "placeholder": "Describe what you want, or how to change this document…",
     "send": "Generate",
     "stop": "Stop",
-    "applying": "Generating…",
+    "applying": "Generating",
     "apply": "Apply to document",
     "discard": "Discard",
     "previewNote": "Below is the AI result; the preview now shows it. Click \"Apply to document\" to write and save.",
@@ -45,7 +47,11 @@
     "hintNew": "New document — describe the content or interface you want.",
     "hintEdit": "Based on the current document — tell the AI how to change it.",
     "stateCaptured": "Interface state captured — will be sent with your next message",
-    "stateAttached": "interface state attached"
+    "stateAttached": "interface state attached",
+    "pick": "Pick",
+    "pickElement": "Click an element in the preview (press again or Esc to cancel)",
+    "pickAttached": "picked {tag}",
+    "clearPicked": "Clear picked element"
   },
   "settings": {
     "title": "Settings · Agent",

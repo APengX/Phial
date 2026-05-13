@@ -21,7 +21,19 @@ class Config:
     """Flask + app configuration."""
 
     SECRET_KEY = os.environ.get("SECRET_KEY", "phial-secret-key")
-    DEBUG = os.environ.get("FLASK_DEBUG", "True").lower() == "true"
+    # Off by default: the Werkzeug debugger is an RCE vector if the port is reachable.
+    DEBUG = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+
+    # Browser origins allowed to call /api/* directly (comma-separated). The Vite
+    # dev server proxies /api to the backend, so same-origin requests never need
+    # this; it only matters when the browser hits the backend port directly.
+    CORS_ORIGINS = [
+        o.strip()
+        for o in os.environ.get(
+            "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+        ).split(",")
+        if o.strip()
+    ]
 
     # Show unicode (e.g. Chinese) directly in JSON responses.
     JSON_AS_ASCII = False

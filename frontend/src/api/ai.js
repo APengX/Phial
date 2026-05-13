@@ -1,8 +1,9 @@
 /**
  * Stream an AI generation/edit over Server-Sent Events.
  *
- * @param {{prompt:string, currentHtml?:string, path?:string}} payload
- * @param {{onDelta?:(text:string)=>void, onDone?:(r:{html:string,raw:string})=>void,
+ * @param {{prompt:string, currentHtml?:string, path?:string, interfaceState?:any}} payload
+ * @param {{onDelta?:(text:string)=>void,
+ *          onDone?:(r:{html:string,raw:string,mode:'patch'|'full'|'noop',applied:number,failed:string[]})=>void,
  *          onError?:(msg:string)=>void, signal?:AbortSignal}} handlers
  */
 export async function streamChat(payload, handlers = {}) {
@@ -50,7 +51,10 @@ export async function streamChat(payload, handlers = {}) {
           evt = JSON.parse(line.slice(5).trim())
         } catch { continue }
         if (evt.type === 'delta') onDelta?.(evt.text || '')
-        else if (evt.type === 'done') onDone?.({ html: evt.html || '', raw: evt.raw || '' })
+        else if (evt.type === 'done') onDone?.({
+          html: evt.html || '', raw: evt.raw || '',
+          mode: evt.mode || 'full', applied: evt.applied || 0, failed: evt.failed || []
+        })
         else if (evt.type === 'error') onError?.(evt.message || 'error')
       }
     }

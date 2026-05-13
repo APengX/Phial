@@ -42,10 +42,10 @@ def ensure_available(provider: str) -> dict:
 
 def _merged_env(env_extra: Optional[Dict[str, str]]) -> Dict[str, str]:
     env = dict(os.environ)
-    for k, v in (env_extra or {}).items():
-        if v is None:
-            continue
-        env[str(k)] = str(v)
+    # Defense in depth: even if a stale settings file holds extra keys, only the
+    # allow-listed ones reach the child (see agents_svc.ALLOWED_ENV_KEYS).
+    for k, v in agents_svc.filter_env(env_extra).items():
+        env[k] = v
     return env
 
 
@@ -121,19 +121,28 @@ def stream(
 
     deadline = time.time() + _MAX_SECONDS
     produced = False
-    while True:
-        remaining = deadline - time.time()
-        if remaining <= 0:
-            proc.kill()
-            raise CliAgentError(f"{a['name']} 超时（> {_MAX_SECONDS}s）")
+    try:
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                proc.kill()
+                raise CliAgentError(f"{a['name']} 超时（> {_MAX_SECONDS}s）")
+            try:
+                kind, val = q.get(timeout=min(remaining, 0.5))
+            except queue.Empty:
+                continue
+            if kind == "end":
+                break
+            produced = True
+            yield val
+    except GeneratorExit:
+        # Client went away mid-stream — don't leave the CLI process running.
+        logger.info("agent stream closed by client; killing %s", a["bin"])
         try:
-            kind, val = q.get(timeout=min(remaining, 0.5))
-        except queue.Empty:
-            continue
-        if kind == "end":
-            break
-        produced = True
-        yield val
+            proc.kill()
+        except Exception:  # noqa: BLE001
+            pass
+        raise
 
     rc = proc.wait()
     # give the stderr drainer a beat to finish

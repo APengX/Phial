@@ -104,6 +104,12 @@
     var savedEl = document.getElementById('saved');
     var seq = 200;
 
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
     function render() {
       board.innerHTML = '';
       COLS.forEach(function (c) {

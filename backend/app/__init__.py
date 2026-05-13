@@ -25,10 +25,11 @@ def create_app(config_class=Config) -> Flask:
         logger.info("=" * 48)
         logger.info("Phial backend starting...")
         logger.info("workspace default: %s", config_class.WORKSPACE_DEFAULT)
+        logger.info("CORS origins: %s", ", ".join(config_class.CORS_ORIGINS) or "(none)")
         logger.info("LLM configured: %s", config_class.llm_configured())
         logger.info("=" * 48)
 
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     from .api import agents_bp, ai_bp, documents_bp, workspace_bp
 

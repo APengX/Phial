@@ -7,9 +7,14 @@ Routes to whichever provider is active in settings:
 POST /api/ai/chat   {prompt, currentHtml?, interfaceState?, path?}
   Streams Server-Sent Events:
     data: {"type":"delta","text":"..."}      (repeated)
-    data: {"type":"done","html":"<full html>","raw":"<model reply>"}
+    data: {"type":"done","html":"<full html>","raw":"<model reply>",
+           "mode":"patch"|"full"|"noop","applied":N,"failed":["..."]}
     data: {"type":"error","message":"..."}
-POST /api/ai/chat?stream=0   -> non-streaming, returns {html, raw} as plain JSON.
+POST /api/ai/chat?stream=0   -> non-streaming, returns the same payload as JSON.
+
+When editing an existing doc the model is asked for SEARCH/REPLACE blocks, which
+the backend applies to `currentHtml` (see html_agent.finalize_html); it falls
+back to treating the reply as a whole document if no blocks are found.
 """
 
 import json
@@ -22,7 +27,7 @@ from ..services import app_settings
 from ..services import cli_agent
 from ..services.agents import BUILTIN_ID
 from ..services.cli_agent import CliAgentError
-from ..services.html_agent import build_messages, build_prompt, extract_html
+from ..services.html_agent import build_messages, build_prompt, finalize_html
 from ..services.llm_client import LLMClient, LLMNotConfigured
 from ..utils.logger import get_logger
 from ..utils.responses import fail, ok
@@ -42,7 +47,8 @@ def chat():
     interface_state = data.get("interfaceState")
     if interface_state is None:
         interface_state = data.get("interface_state")
-    if not prompt and interface_state is None:
+    picked_element = data.get("pickedElement") or data.get("picked_element")
+    if not prompt and interface_state is None and not picked_element:
         return fail("缺少 prompt")
 
     agent_cfg = app_settings.get("agent") or {}
@@ -54,7 +60,7 @@ def chat():
             client = LLMClient()
         except LLMNotConfigured as exc:
             return fail(str(exc), 503)
-        messages = build_messages(prompt, current_html, interface_state)
+        messages = build_messages(prompt, current_html, interface_state, picked_element)
         max_tokens = Config.LLM_MAX_TOKENS
 
         def make_stream():
@@ -68,7 +74,7 @@ def chat():
             cli_agent.ensure_available(provider)
         except CliAgentError as exc:
             return fail(str(exc), 503)
-        text_prompt = build_prompt(prompt, current_html, interface_state)
+        text_prompt = build_prompt(prompt, current_html, interface_state, picked_element)
         model = agent_cfg.get("model") or ""
         env_extra = agent_cfg.get("env") or {}
 
@@ -83,13 +89,13 @@ def chat():
     if not streaming:
         try:
             raw = make_oneshot()
-            return ok({"raw": raw, "html": extract_html(raw)})
+            return ok({"raw": raw, **finalize_html(raw, current_html)})
         except CliAgentError as exc:
             logger.warning("CLI agent failed: %s", exc)
             return fail(str(exc), 502)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("provider call failed")
-            return fail(f"调用失败: {exc}", 502)
+            return fail("调用失败，请查看后端日志", 502)
 
     @stream_with_context
     def generate():
@@ -99,13 +105,13 @@ def chat():
                 buf.append(piece)
                 yield _sse({"type": "delta", "text": piece})
             raw = "".join(buf)
-            yield _sse({"type": "done", "raw": raw, "html": extract_html(raw)})
+            yield _sse({"type": "done", "raw": raw, **finalize_html(raw, current_html)})
         except CliAgentError as exc:
             logger.warning("CLI agent stream failed: %s", exc)
             yield _sse({"type": "error", "message": str(exc)})
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("provider stream failed")
-            yield _sse({"type": "error", "message": f"调用失败: {exc}"})
+            yield _sse({"type": "error", "message": "调用失败，请查看后端日志"})
 
     return Response(
         generate(),

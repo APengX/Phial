@@ -6,7 +6,7 @@ GET    /api/documents/content?path=   -> one document {path,title,html,...}
 POST   /api/documents                 -> create   {path, html?, title?}
 PUT    /api/documents/content         -> save     {path, html}
 POST   /api/documents/rename          -> rename   {src, dst}
-DELETE /api/documents?path=           -> delete
+DELETE /api/documents?path=           -> delete   (a document, or a folder + its contents)
 POST   /api/documents/mkdir           -> create folder {path}
 """
 
@@ -102,10 +102,12 @@ def delete_doc():
     path = request.args.get("path", "") or _body().get("path", "")
     try:
         Workspace.delete_doc(path)
-        logger.info("deleted document %s", path)
+        logger.info("deleted %s", path)
         return ok({"path": path})
     except WorkspaceError as exc:
         return fail(str(exc), 404 if "不存在" in str(exc) else 400)
+    except OSError as exc:
+        return fail(f"删除失败: {exc}")
 
 
 @documents_bp.route("/mkdir", methods=["POST"])

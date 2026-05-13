@@ -48,7 +48,8 @@ def set_agent():
         env = data.get("env") or {}
         if not isinstance(env, dict):
             return fail("env 必须是一个对象")
-        patch["env"] = {str(k): str(v) for k, v in env.items() if str(k).strip()}
+        # Only the documented per-agent keys are persisted; anything else is dropped.
+        patch["env"] = svc.filter_env(env)
 
     settings = app_settings.update({"agent": patch})
     logger.info("active agent -> %s (model=%r)", provider, settings["agent"].get("model"))

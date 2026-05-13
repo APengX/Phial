@@ -20,7 +20,9 @@ from app.config import Config
 def main():
     app = create_app()
 
-    host = os.environ.get("FLASK_HOST", "0.0.0.0")
+    # Loopback by default: the API is unauthenticated, so don't expose it to the
+    # LAN unless the user explicitly opts in via FLASK_HOST.
+    host = os.environ.get("FLASK_HOST", "127.0.0.1")
     port = int(os.environ.get("FLASK_PORT", 5001))
     debug = Config.DEBUG
 
