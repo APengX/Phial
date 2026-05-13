@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Prompt 工作台</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 20px; background: #f6f7f9; color: #1f2328;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    .sub { color: #6b7280; font-size: 0.9rem; margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    .pane { background: #fff; border: 1px solid #e4e6eb; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; }
+    .pane h2 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin: 0 0 8px; }
+    textarea {
+      font: inherit; font-size: 0.92rem; width: 100%; border: 1px solid #e4e6eb; border-radius: 8px;
+      padding: 10px; resize: vertical; min-height: 150px; color: #1f2328; background: #fcfcfd;
+    }
+    textarea:focus { outline: none; border-color: #c4b5fd; }
+    textarea.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.86rem; }
+    .preview {
+      flex: 1; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace;
+      font-size: 0.82rem; background: #0f1117; color: #e6e9ef; border-radius: 8px; padding: 12px; min-height: 150px; overflow: auto;
+    }
+    .preview .role { color: #a78bfa; }
+    .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    button { font: inherit; font-size: 0.86rem; cursor: pointer; border: 1px solid #e4e6eb; background: #fff; border-radius: 7px; padding: 7px 13px; }
+    button:hover { background: #eef0f3; }
+    button.primary { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+    button.primary:hover { background: #5b21b6; }
+    .spacer { flex: 1; }
+    .stat { font-size: 0.8rem; color: #6b7280; }
+    .stat b { color: #1f2328; font-variant-numeric: tabular-nums; }
+    .note { font-size: 0.78rem; color: #9aa0aa; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Prompt 工作台</h1>
+  <p class="sub">左边改 system prompt，右边给个样例输入，下方实时拼出完整对话和粗略 token 数。调好点「应用这个 prompt」就把它带回 AI 对话里。</p>
+
+  <div class="grid">
+    <div class="pane">
+      <h2>System prompt</h2>
+      <textarea id="sys" class="code" rows="10">你是一个简洁、直接的技术写作助手。
+- 用短句，避免套话和营销腔。
+- 给结论先行，再给理由。
+- 不确定时直说"不确定"，不要编。</textarea>
+      <div class="note">这部分会作为 <code>role: system</code> 发给模型。</div>
+    </div>
+    <div class="pane">
+      <h2>样例用户输入</h2>
+      <textarea id="usr" rows="6">帮我把这段话改得更精炼："我们这边其实是想说，这个功能呢，可能在大多数情况下，对于一般用户来讲，是挺有用的。"</textarea>
+      <h2 style="margin-top:12px;">拼出的对话（预览）</h2>
+      <div class="preview" id="preview"></div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span class="stat">字符：<b id="chars">0</b></span>
+    <span class="stat">≈ tokens：<b id="tokens">0</b></span>
+    <button id="copy">复制 system prompt</button>
+    <span class="spacer"></span>
+    <button class="primary" id="apply">应用这个 prompt →</button>
+  </div>
+  <p class="note">token 数是 <code>字符数 / 3.5</code> 的粗估，仅供量级参考。</p>
+
+  <script>
+    var phial = window.phial || { setState: function(){}, sendToAgent: function(){}, emit: function(){}, ready: function(){} };
+    var sys = document.getElementById('sys');
+    var usr = document.getElementById('usr');
+    var preview = document.getElementById('preview');
+    var charsEl = document.getElementById('chars');
+    var tokensEl = document.getElementById('tokens');
+
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function update() {
+      var s = sys.value, u = usr.value;
+      preview.innerHTML =
+        '<span class="role">system:</span>\n' + esc(s) + '\n\n' +
+        '<span class="role">user:</span>\n' + esc(u);
+      var total = s.length + u.length;
+      charsEl.textContent = total;
+      tokensEl.textContent = Math.round(total / 3.5);
+      phial.setState({ systemPrompt: s, sampleInput: u, approxTokens: Math.round(total / 3.5) });
+    }
+
+    sys.addEventListener('input', update);
+    usr.addEventListener('input', update);
+
+    document.getElementById('copy').addEventListener('click', function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(sys.value);
+    });
+
+    document.getElementById('apply').addEventListener('click', function () {
+      phial.sendToAgent('这是我调好的 system prompt（附带样例输入），帮我评估一下，或基于它继续。', {
+        systemPrompt: sys.value,
+        sampleInput: usr.value
+      });
+    });
+
+    update();
+    phial.ready();
+  </script>
+</body>
+</html>
