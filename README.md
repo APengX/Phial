@@ -121,12 +121,13 @@ npm run dev            # 同时起后端(:5001) 和前端(:3000)
 - [x] `window.phial` 回传桥（`setState` / `sendToAgent`）+ 交互示例文档
 - [x] 可插拔 agent：内置 LLM API / 本地 CLI（Claude Code、Codex、Gemini）+ 设置面板（检测、选 agent、配模型与环境变量）
 - [x] 按文档绑定的代码 / 笔记文件夹做对话上下文（首页绑文件夹「圈定范围」；编辑器侧的「📎 上下文」面板里细粒度勾要发的文件，默认一个不发；同时可跨选工作区里其它 `.html` 文档，便于互相链接）
+- [x] 可视化块编辑（类 Notion）—— 编辑器顶部 `块 / 源码 / 分栏 / 预览` 四种视图。块视图基于 TipTap：`/` 召唤命令菜单、左侧拖拽手柄、Markdown 简写（`# ` `> ` `- ` ``` 等）、表格、折叠块（原生 `<details>`）、多列、Callout、图片上传/拖入/粘贴。带 `<script>` 的交互 widget 作为整段 **Widget 块**内嵌在文档里（沙箱 iframe 预览 + 「编辑 HTML」弹窗），与正文块并排存在 —— 保留 Phial 的「可操作界面」定位
 - [ ] CLI agent 流式更细粒度（解析 `claude --output-format stream-json`）、让它直接改文件
 - [ ] 文档全文搜索、标签
 - [ ] 更多内置模板（日程规划、方案对比、清单分类、表单……）
 - [ ] 暴露 MCP server，让外部 agent（Claude Code / Cursor）直接驱动
 - [ ] 导出（单文件 HTML / PDF / Markdown）、版本历史
-- [ ] 可视化块编辑（类 Notion）
+- [ ] 块编辑器扩展：链接富预览、表格 cell 合并、图片 out-of-line 存到工作区资产目录
 
 ## 协议
 

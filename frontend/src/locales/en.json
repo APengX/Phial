@@ -25,9 +25,17 @@
   },
   "editor": {
     "back": "Back",
+    "blocks": "Blocks",
     "source": "HTML source",
     "preview": "Preview",
     "split": "Split",
+    "edit": "Edit",
+    "editing": "Editing",
+    "editModeActive": "Click elements in preview to edit text (press Esc to exit)",
+    "editModeInactive": "Enable edit mode: click elements in preview to edit text",
+    "editElement": "Edit element text",
+    "editHint": "Edit text content of <{tag}> (Cmd/Ctrl+Enter to apply)",
+    "apply": "Apply",
     "save": "Save",
     "saved": "Saved",
     "unsaved": "Unsaved",
@@ -111,6 +119,68 @@
     "willRun": "Will run",
     "save": "Save",
     "saved": "Switched to {name}"
+  },
+  "blocks": {
+    "placeholder": "Write here — type / for a block menu, or use Markdown shortcuts like # / - / > / ```",
+    "handleTip": "Drag to move · click for options",
+    "slashEmpty": "No blocks match \"{q}\"",
+    "imagePrompt": "Image URL:",
+    "toggleDefault": "Toggle",
+    "items": {
+      "paragraph": "Text",
+      "h1": "Heading 1",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "ul": "Bulleted list",
+      "ol": "Numbered list",
+      "task": "To-do list",
+      "quote": "Quote",
+      "code": "Code block",
+      "divider": "Divider",
+      "image": "Image",
+      "callout": "Callout",
+      "table": "Table",
+      "toggle": "Toggle",
+      "cols2": "2 columns",
+      "cols3": "3 columns"
+    },
+    "hints": {
+      "paragraph": "Plain paragraph"
+    },
+    "menu": {
+      "turnInto": "Turn into",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    },
+    "callout": {
+      "pickIcon": "Pick an icon"
+    },
+    "toggle": {
+      "savedOpen": "Saved as expanded — click to save as collapsed",
+      "savedClosed": "Saved as collapsed — click to save as expanded"
+    },
+    "image": {
+      "tooLarge": "“{name}” is over {max}; pick a smaller image"
+    },
+    "table": {
+      "rowAbove": "Insert row above",
+      "rowBelow": "Insert row below",
+      "colLeft": "Insert column left",
+      "colRight": "Insert column right",
+      "delRow": "Delete row",
+      "delCol": "Delete column",
+      "delTable": "Delete table"
+    },
+    "widget": {
+      "badge": "Widget",
+      "edit": "Edit HTML",
+      "editTitle": "Edit widget HTML",
+      "editIntro": "Raw HTML for this widget — including any <script> / <style>. Save (Cmd+S) or Apply commits, Cancel discards.",
+      "editHint": "Cmd/Ctrl+S also applies",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "frameTitle": "Widget preview"
+    }
   },
   "common": { "cancel": "Cancel", "confirm": "OK", "loading": "Loading…", "language": "Language" }
 }
