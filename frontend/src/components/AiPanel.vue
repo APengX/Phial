@@ -59,6 +59,18 @@
       <button class="ghost x" @click="$emit('clear-picked')" :title="t('ai.clearPicked')">×</button>
     </div>
 
+    <div v-if="path" class="ctx-chip" :class="{ on: contextCount > 0 }">
+      <button
+        class="ghost ctx-btn"
+        :title="t('ai.ctxChipTip')"
+        @click="$emit('open-context')"
+      >
+        <span aria-hidden="true">📎</span>
+        {{ t('ai.ctxChip') }}
+        <span class="ctx-n">{{ contextCount }}</span>
+      </button>
+    </div>
+
     <div class="ai-input" :style="{ height: inputHeight + 'px' }">
       <div
         class="height-grip"
@@ -116,10 +128,11 @@ const props = defineProps({
   interfaceState: { default: null },
   pickedElement: { type: Object, default: null },
   pickMode: { type: Boolean, default: false },
+  contextCount: { type: Number, default: 0 },
   disabled: { type: Boolean, default: false },
   disabledReason: { type: String, default: '' }
 })
-const emit = defineEmits(['apply', 'clear-state', 'toggle-pick', 'clear-picked'])
+const emit = defineEmits(['apply', 'clear-state', 'toggle-pick', 'clear-picked', 'open-context'])
 const { t } = useI18n()
 
 // Messages keep `mode` on each entry so a doc's transcript can mix agent + chat
@@ -483,6 +496,23 @@ defineExpose({ submitWith })
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim);
 }
 .pick-chip .x { padding: 1px 7px; color: #6b21a8; margin-left: auto; }
+
+/* Context picker chip — sits above the input, neutral when empty, accent when not. */
+.ctx-chip {
+  display: flex; padding: 6px 12px; border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.ctx-chip.on { background: var(--accent-soft); }
+.ctx-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; font-size: 12px;
+  color: var(--text-dim);
+}
+.ctx-chip.on .ctx-btn { color: var(--accent); border-color: var(--accent); }
+.ctx-n {
+  font-variant-numeric: tabular-nums; min-width: 1ch; text-align: right;
+  font-size: 11.5px; padding: 0 5px; border-radius: 999px; background: var(--bg-soft);
+}
+.ctx-chip.on .ctx-n { background: #fff; color: var(--accent); }
 
 /* ---- input area with top-edge drag handle --------------------------- */
 .ai-input {

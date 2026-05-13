@@ -13,14 +13,15 @@
     "llmOk": "已连接模型：{model}",
     "llmMissing": "未配置 LLM（在 .env 里填 LLM_API_KEY 后重启后端）",
     "contextFolders": "对话上下文文件夹",
-    "contextHint": "把代码 / 笔记目录挂到这篇文档：跟 AI 对话时，文件夹里的文本文件会被读出来塞进 prompt（按字符上限截断，跳过 .git / node_modules / 二进制等）。",
+    "contextHint": "把代码 / 笔记目录挂到这篇文档：这只是「圈定范围」。默认一个文件都不发；具体勾哪些文件去 prompt 里，到编辑器右侧 AI 面板上方的「📎 上下文」里选。",
     "contextEmpty": "还没绑定文件夹。点下面「添加文件夹」加一个。",
     "contextAdd": "添加文件夹",
     "contextAddPrompt": "输入要绑定的本地文件夹绝对路径（例如 /Users/me/projects/foo）：",
     "contextAdded": "已绑定文件夹",
     "contextRemove": "解除绑定",
     "contextMissing": "文件夹不存在或已被移走",
-    "contextStats": "{n} 个文件 · {size}"
+    "contextStats": "{picked}/{total} 个文件已勾 · {size}",
+    "contextStatsEmpty": "{total} 个文件可勾 · 未勾选"
   },
   "editor": {
     "back": "返回",
@@ -68,7 +69,26 @@
     "newChat": "新对话",
     "newChatConfirm": "开始新对话？当前历史会被清空。",
     "dragHeight": "上下拖动调整输入框高度",
-    "chatModeNotice": "Chat 模式：AI 只会回话，不会改文档。需要改文档请切回 Agent。"
+    "chatModeNotice": "Chat 模式：AI 只会回话，不会改文档。需要改文档请切回 Agent。",
+    "ctxChip": "上下文",
+    "ctxChipTip": "勾选要随消息发给 AI 的文件（绑定文件夹里的文件 + 工作区里的其它文档）",
+    "ctxOpen": "管理上下文…"
+  },
+  "ctx": {
+    "title": "对话上下文 · {path}",
+    "intro": "默认一个文件都不发。勾上要让 AI 看的文件，下次发消息时会塞进 prompt。",
+    "folders": "绑定的文件夹",
+    "foldersEmpty": "这篇文档还没绑定文件夹。去首页给它挂一个。",
+    "workspaceDocs": "工作区其它文档",
+    "workspaceDocsEmpty": "工作区里没有其它 .html 文档。",
+    "selectAll": "全选",
+    "clearAll": "清空",
+    "summary": "已选 {files} 文件 · 约 {kb} KB",
+    "loadTreeFailed": "读取文件夹失败：{msg}",
+    "saveFailed": "保存失败：{msg}",
+    "folderMissing": "文件夹不存在或已被移走",
+    "noFiles": "（这个文件夹里没有可读的文本文件）",
+    "close": "关闭"
   },
   "settings": {
     "title": "设置 · Agent",

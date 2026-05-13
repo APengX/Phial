@@ -82,7 +82,12 @@
                 <span class="ctx-name">📁 {{ f.name }}</span>
                 <span class="ctx-meta muted">
                   <template v-if="f.missing">{{ t('home.contextMissing') }}</template>
-                  <template v-else>{{ t('home.contextStats', { n: f.fileCount, size: fmtBytes(f.totalBytes) }) }}</template>
+                  <template v-else-if="(f.pickedCount || 0) > 0">
+                    {{ t('home.contextStats', { picked: f.pickedCount, total: f.fileCount, size: fmtBytes(f.totalBytes) }) }}
+                  </template>
+                  <template v-else>
+                    {{ t('home.contextStatsEmpty', { total: f.fileCount }) }}
+                  </template>
                 </span>
                 <code class="ctx-path muted" :title="f.path">{{ f.path }}</code>
                 <button class="ctx-rm" :title="t('home.contextRemove')" @click="removeCtx(d.path, f.path)">×</button>

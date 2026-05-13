@@ -49,6 +49,7 @@
     </header>
 
     <SettingsModal v-model="settingsOpen" @saved="onAgentSaved" />
+    <ContextPicker v-model="ctxOpen" :path="currentPath" @changed="onCtxChanged" />
 
     <div class="body">
       <!-- file tree -->
@@ -93,12 +94,14 @@
           :interface-state="interfaceState"
           :picked-element="pickedElement"
           :pick-mode="pickMode"
+          :context-count="ctxCount"
           :disabled="!agentReady"
           :disabled-reason="agent.label || t('home.llmMissing')"
           @apply="onAiApply"
           @clear-state="interfaceState = null"
           @toggle-pick="togglePick"
           @clear-picked="pickedElement = null"
+          @open-context="ctxOpen = true"
         />
       </aside>
     </div>
@@ -116,8 +119,10 @@ import HtmlEditor from '@/components/HtmlEditor.vue'
 import SandboxPreview from '@/components/SandboxPreview.vue'
 import AiPanel from '@/components/AiPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
+import ContextPicker from '@/components/ContextPicker.vue'
 import { getDocument, saveDocument, getTree, deleteDocument, renameDocument } from '@/api/documents'
 import { getWorkspace, setRenderSettings } from '@/api/workspace'
+import { getContextPicks } from '@/api/context'
 import { pushToast } from '@/composables/useToast'
 
 const route = useRoute()
@@ -142,6 +147,8 @@ const openSet = ref(new Set())
 const render = ref({ allowScripts: true, allowExternal: false })
 const agent = ref({ label: '', ready: true })
 const settingsOpen = ref(false)
+const ctxOpen = ref(false)
+const ctxCount = ref(0)   // total picked files for the current doc (chip badge)
 
 // resizable AI panel
 const AI_MIN = 300
@@ -197,10 +204,36 @@ async function loadDoc() {
     interfaceState.value = null
     pickedElement.value = null
     pickMode.value = false
+    refreshCtxCount()
   } catch (e) {
     pushToast(e.message, 'error')
     goHome()
   }
+}
+
+// Fetches just the picks so the chip shows the right number even before the
+// drawer is opened. Cheap: settings.json read.
+async function refreshCtxCount() {
+  if (!currentPath.value) {
+    ctxCount.value = 0
+    return
+  }
+  try {
+    const picks = await getContextPicks(currentPath.value)
+    ctxCount.value = countPicks(picks)
+  } catch {
+    ctxCount.value = 0
+  }
+}
+
+function countPicks(picks) {
+  let n = (picks?.docs || []).length
+  for (const f of (picks?.folders || [])) n += (f.picks || []).length
+  return n
+}
+
+function onCtxChanged(picks) {
+  ctxCount.value = countPicks(picks)
 }
 
 async function save() {

@@ -13,14 +13,15 @@
     "llmOk": "Model connected: {model}",
     "llmMissing": "No LLM configured (set LLM_API_KEY in .env, then restart the backend)",
     "contextFolders": "Context folders",
-    "contextHint": "Attach local folders (code, notes, …) to this document. When you chat with the AI about it, the folders' text files get read and spliced into the prompt — capped by total character count, skipping .git / node_modules / binaries.",
+    "contextHint": "Attach local folders (code, notes, …) to this document — this only sets the *range* the picker can draw from. Nothing is sent until you tick specific files in the editor's \"📎 Context\" chip (above the AI input).",
     "contextEmpty": "No folders bound yet. Click \"Add folder\" below to attach one.",
     "contextAdd": "Add folder",
     "contextAddPrompt": "Enter an absolute path to a local folder (e.g. /Users/me/projects/foo):",
     "contextAdded": "Folder attached",
     "contextRemove": "Unbind",
     "contextMissing": "folder is missing or has been moved",
-    "contextStats": "{n} files · {size}"
+    "contextStats": "{picked}/{total} files picked · {size}",
+    "contextStatsEmpty": "{total} files available · none picked"
   },
   "editor": {
     "back": "Back",
@@ -68,7 +69,26 @@
     "newChat": "New chat",
     "newChatConfirm": "Start a new chat? The current history will be cleared.",
     "dragHeight": "Drag up/down to resize the input",
-    "chatModeNotice": "Chat mode: the AI will only reply with text and won't touch the document. Switch back to Agent to edit."
+    "chatModeNotice": "Chat mode: the AI will only reply with text and won't touch the document. Switch back to Agent to edit.",
+    "ctxChip": "Context",
+    "ctxChipTip": "Pick the files to send with your next message (files inside bound folders + other workspace docs)",
+    "ctxOpen": "Manage context…"
+  },
+  "ctx": {
+    "title": "Conversation context · {path}",
+    "intro": "Nothing is sent by default. Tick the files you want the AI to see and they'll be spliced into the next prompt.",
+    "folders": "Bound folders",
+    "foldersEmpty": "No folders attached to this document yet. Attach one from the home page.",
+    "workspaceDocs": "Other workspace documents",
+    "workspaceDocsEmpty": "No other .html documents in the workspace.",
+    "selectAll": "Select all",
+    "clearAll": "Clear",
+    "summary": "{files} files picked · ~{kb} KB",
+    "loadTreeFailed": "Failed to load folder: {msg}",
+    "saveFailed": "Save failed: {msg}",
+    "folderMissing": "folder is missing or has been moved",
+    "noFiles": "(no readable text files in this folder)",
+    "close": "Close"
   },
   "settings": {
     "title": "Settings · Agent",
