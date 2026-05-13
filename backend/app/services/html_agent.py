@@ -86,6 +86,127 @@ CSS 选择器（仅供参考）：`{selector}`
 - 如果找不到（通常是因为它是 JS 动态生成的），就在当前文档的源代码里找**生成它的那部分代码**（模板、数据数组、render 函数等），改那里。"""
 
 
+# --- Chat mode (no HTML edits, just talk about the document) ------------------
+
+_CHAT_SYSTEM_PROMPT = """你是 Phial 编辑器里的对话助手。
+
+用户正在编辑一篇 HTML 文档，他们当前是来**聊**的——问你某个名词是什么意思、让你解释一段内容、要建议、想想清楚下一步做什么。你的角色就是回答他们的问题，不动文档。**你没有这篇文档的全文**，所以不要假装看过；只能依据用户在这条消息里给你的东西（他们的问题、可能附上的"选中的元素"）来回答。
+
+**只回答用户问的那件事**：
+- 用户的问题就是消息里那行文字。如果他们附了一段"选中的元素"，那是给你看的背景资料，是问题的**对象**而不是话题本身——不要解读"你选了哪个元素 / 它的标签名 / CSS 选择器是什么"，用户自己点的，自己知道。
+- 如果问题没说清楚"问的是什么"（比如就一个名词、一句"这是什么意思"），结合"选中的元素"推断他们指的是哪段，然后直接解释那个**概念 / 名词 / 句子本身**。不要先说"你选中了 xxx"——直接答。
+- 不要把背景资料原样复述或翻译回来给用户看（不要把元素属性列一遍）。
+- 不知道就说不知道，别编；用户没给到的上下文（整篇文档的其他部分、外部链接里的内容）你看不到，不要瞎猜。
+
+输出格式（硬性）：
+- 只输出**纯文本**：不要任何 HTML 标签（`<p>` `<div>` `<strong>` `<br>` `<ul>` 都不写，也不要写转义实体），不要 Markdown 标记（`#` 标题、`**加粗**`、`-` 列表项前缀、``` 代码围栏统统不要），不要 SEARCH/REPLACE 编辑块。
+- 想分段就空一行；想列要点就直接换行写、或者用「1. 2. 3.」编号；想强调就用语气表达。
+
+如果用户的问题其实是想让你**改文档**（"加一段……"、"把 X 改成 Y"、"重新排版"），不要在这里动手——告诉他们切换到 Agent 模式再说一次。
+
+中文用户用中文回答；语气简洁，像在跟同事说话。"""
+
+_CHAT_PICKED_BLOCK = """[背景资料 · 用户在预览里选中的元素]
+
+```html
+{html}
+```
+
+(用户的问题大概率是围绕这段内容的——把它当成问题的**对象**。不要描述"你选了哪个元素 / 它的标签名 / CSS 选择器"——用户自己点的，自己知道。直接回答他们对这段内容问的那件事。)"""
+
+
+_CONTEXT_SYSTEM_BLOCK = """[背景资料 · 用户绑定到当前文档的本地文件夹]
+
+下面是用户在 Phial 首页给这篇文档挂上的本地文件夹（通常是相关的代码 / 笔记 / 配置）。把它当成只读的对话背景：
+
+- 用户接下来的请求（"加一段……" / "解释一下 X" / "把它改成 Y"）经常隐含地引用其中的内容；
+- 这些文件**不是 Phial 文档**，不要修改它们、也不要把它们整篇复述出来；
+- 引用具体片段时点到相关文件名即可，不要长段抄录；
+- 没用到的文件就不用提。
+
+```
+{bundle}
+```"""
+
+
+def _format_picked_for_chat(picked: Any) -> Optional[str]:
+    if not picked or not isinstance(picked, dict):
+        return None
+    html = (picked.get("outerHTML") or "").strip()
+    if not html:
+        return None
+    return _CHAT_PICKED_BLOCK.format(html=html)
+
+
+def build_chat_messages(
+    prompt: str,
+    current_html: Optional[str] = None,  # noqa: ARG001 — chat doesn't ship the whole doc
+    history: Optional[List[dict]] = None,
+    path: Optional[str] = None,  # noqa: ARG001 — kept for signature parity with agent mode
+    interface_state: Any = None,  # noqa: ARG001 — intentionally ignored in chat
+    picked_element: Any = None,
+    context_bundle: Optional[str] = None,
+) -> List[dict]:
+    """Build messages for chat-mode replies: free-form text, no HTML edits.
+
+    `history` is the prior turns from the panel as `[{"role": "user"|"assistant",
+    "text": "..."}]`; only those two roles are kept and empties are dropped.
+
+    What is *not* sent in chat mode, by design:
+      - `current_html` (the whole document). Chat is mostly "what does this
+        term mean / explain this snippet" — shipping a big doc into the prompt
+        eats tokens and pulls the model's attention onto things it wasn't
+        asked about. If the user wants the model to look at a specific spot,
+        they "pick" that element and it arrives via `picked_element`.
+      - `interface_state` (the JSON state blob). It's an agent-mode artifact
+        for patch generation; in a chat about a term it's just noise that the
+        model tries to narrate back at the user.
+    """
+    messages: List[dict] = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT}]
+
+    if context_bundle and context_bundle.strip():
+        messages.append({
+            "role": "system",
+            "content": _CONTEXT_SYSTEM_BLOCK.format(bundle=context_bundle.strip()),
+        })
+
+    picked_block = _format_picked_for_chat(picked_element)
+    if picked_block:
+        messages.append({"role": "system", "content": picked_block})
+
+    for turn in history or []:
+        role = (turn.get("role") or "").strip()
+        text = (turn.get("text") or "").strip()
+        if role not in ("user", "assistant") or not text:
+            continue
+        messages.append({"role": role, "content": text})
+
+    if prompt and prompt.strip():
+        messages.append({"role": "user", "content": prompt.strip()})
+
+    return messages
+
+
+def build_chat_prompt(
+    prompt: str,
+    current_html: Optional[str] = None,
+    history: Optional[List[dict]] = None,
+    path: Optional[str] = None,
+    interface_state: Any = None,
+    picked_element: Any = None,
+    context_bundle: Optional[str] = None,
+) -> str:
+    """Flatten chat messages into one prompt string for CLI agents."""
+    msgs = build_chat_messages(
+        prompt, current_html, history, path, interface_state, picked_element, context_bundle
+    )
+    out: List[str] = []
+    for m in msgs:
+        role = m["role"].upper()
+        out.append(f"[{role}]\n{m['content'].strip()}")
+    return "\n\n---\n\n".join(out)
+
+
 def _format_state(state: Any) -> Optional[str]:
     if state is None or state == "" or state == {} or state == []:
         return None
@@ -111,6 +232,7 @@ def build_messages(
     current_html: Optional[str] = None,
     interface_state: Any = None,
     picked_element: Any = None,
+    context_bundle: Optional[str] = None,
 ) -> List[dict]:
     prompt = (prompt or "").strip()
     parts: List[str] = []
@@ -128,10 +250,14 @@ def build_messages(
         user = _EDIT_TEMPLATE.format(current_html=current_html.strip(), request=request)
     else:
         user = _CREATE_TEMPLATE.format(request=request)
-    return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user", "content": user},
-    ]
+    messages: List[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+    if context_bundle and context_bundle.strip():
+        messages.append({
+            "role": "system",
+            "content": _CONTEXT_SYSTEM_BLOCK.format(bundle=context_bundle.strip()),
+        })
+    messages.append({"role": "user", "content": user})
+    return messages
 
 
 def build_prompt(
@@ -139,11 +265,14 @@ def build_prompt(
     current_html: Optional[str] = None,
     interface_state: Any = None,
     picked_element: Any = None,
+    context_bundle: Optional[str] = None,
 ) -> str:
     """A single text prompt (system instructions + user request) for CLI agents
     that take one prompt string rather than a messages array."""
-    msgs = build_messages(prompt, current_html, interface_state, picked_element)
-    return msgs[0]["content"].rstrip() + "\n\n---\n\n" + msgs[1]["content"].strip()
+    msgs = build_messages(prompt, current_html, interface_state, picked_element, context_bundle)
+    # Flatten: system + (optional) context + user, separated by hard rules so a
+    # CLI agent's prompt parser doesn't mush them together.
+    return "\n\n---\n\n".join(m["content"].strip() for m in msgs)
 
 
 _FENCE_RE = re.compile(r"```(?:html|HTML)?\s*\n?(.*?)```", re.DOTALL)

@@ -11,7 +11,16 @@
     "useExample": "创建",
     "open": "打开",
     "llmOk": "已连接模型：{model}",
-    "llmMissing": "未配置 LLM（在 .env 里填 LLM_API_KEY 后重启后端）"
+    "llmMissing": "未配置 LLM（在 .env 里填 LLM_API_KEY 后重启后端）",
+    "contextFolders": "对话上下文文件夹",
+    "contextHint": "把代码 / 笔记目录挂到这篇文档：跟 AI 对话时，文件夹里的文本文件会被读出来塞进 prompt（按字符上限截断，跳过 .git / node_modules / 二进制等）。",
+    "contextEmpty": "还没绑定文件夹。点下面「添加文件夹」加一个。",
+    "contextAdd": "添加文件夹",
+    "contextAddPrompt": "输入要绑定的本地文件夹绝对路径（例如 /Users/me/projects/foo）：",
+    "contextAdded": "已绑定文件夹",
+    "contextRemove": "解除绑定",
+    "contextMissing": "文件夹不存在或已被移走",
+    "contextStats": "{n} 个文件 · {size}"
   },
   "editor": {
     "back": "返回",
@@ -51,7 +60,15 @@
     "pick": "选元素",
     "pickElement": "在预览里点要修改的元素（再按一次或按 Esc 取消）",
     "pickAttached": "已选中 {tag}",
-    "clearPicked": "取消选中"
+    "clearPicked": "取消选中",
+    "modeAgent": "Agent",
+    "modeChat": "Chat",
+    "modeAgentTip": "Agent · 让 AI 直接写 / 改这篇文档",
+    "modeChatTip": "Chat · 围绕这篇文档聊一聊，不动文档",
+    "newChat": "新对话",
+    "newChatConfirm": "开始新对话？当前历史会被清空。",
+    "dragHeight": "上下拖动调整输入框高度",
+    "chatModeNotice": "Chat 模式：AI 只会回话，不会改文档。需要改文档请切回 Agent。"
   },
   "settings": {
     "title": "设置 · Agent",

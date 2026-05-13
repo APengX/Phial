@@ -120,6 +120,7 @@ npm run dev            # 同时起后端(:5001) 和前端(:3000)
 - [x] AI 面板：聊天 → 流式生成 HTML / 界面 → 自动渲染
 - [x] `window.phial` 回传桥（`setState` / `sendToAgent`）+ 交互示例文档
 - [x] 可插拔 agent：内置 LLM API / 本地 CLI（Claude Code、Codex、Gemini）+ 设置面板（检测、选 agent、配模型与环境变量）
+- [x] 按文档绑定的代码 / 笔记文件夹做对话上下文（首页给每个 `.html` 挂本地目录，对话时按字符上限自动塞进 prompt）
 - [ ] CLI agent 流式更细粒度（解析 `claude --output-format stream-json`）、让它直接改文件
 - [ ] 文档全文搜索、标签
 - [ ] 更多内置模板（日程规划、方案对比、清单分类、表单……）

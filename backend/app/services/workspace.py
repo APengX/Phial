@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from ..config import Config
 from ..utils.logger import get_logger
-from . import app_settings
+from . import agent_guide, app_settings
 
 logger = get_logger("phial.workspace")
 
@@ -71,6 +71,10 @@ class Workspace:
         cls._root = p
         app_settings.set_key("workspace", str(p))
         logger.info("workspace root set to %s", p)
+        # First time we point at a folder, drop the agent bundle (AGENTS.md
+        # + CLAUDE.md + the phial-html skill) so external agents that crawl
+        # or load it later know what Phial expects (see agent_guide).
+        agent_guide.ensure(p)
         return p
 
     # -- path safety --------------------------------------------------------

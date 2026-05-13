@@ -1,9 +1,10 @@
 /**
  * Stream an AI generation/edit over Server-Sent Events.
  *
- * @param {{prompt:string, currentHtml?:string, path?:string, interfaceState?:any}} payload
+ * @param {{prompt:string, currentHtml?:string, path?:string, interfaceState?:any,
+ *          mode?:'agent'|'chat', history?:Array<{role:string,text:string}>}} payload
  * @param {{onDelta?:(text:string)=>void,
- *          onDone?:(r:{html:string,raw:string,mode:'patch'|'full'|'noop',applied:number,failed:string[]})=>void,
+ *          onDone?:(r:{html:string,raw:string,text:string,mode:'patch'|'full'|'noop'|'chat',applied:number,failed:string[]})=>void,
  *          onError?:(msg:string)=>void, signal?:AbortSignal}} handlers
  */
 export async function streamChat(payload, handlers = {}) {
@@ -52,7 +53,7 @@ export async function streamChat(payload, handlers = {}) {
         } catch { continue }
         if (evt.type === 'delta') onDelta?.(evt.text || '')
         else if (evt.type === 'done') onDone?.({
-          html: evt.html || '', raw: evt.raw || '',
+          html: evt.html || '', raw: evt.raw || '', text: evt.text || '',
           mode: evt.mode || 'full', applied: evt.applied || 0, failed: evt.failed || []
         })
         else if (evt.type === 'error') onError?.(evt.message || 'error')

@@ -11,7 +11,16 @@
     "useExample": "Create",
     "open": "Open",
     "llmOk": "Model connected: {model}",
-    "llmMissing": "No LLM configured (set LLM_API_KEY in .env, then restart the backend)"
+    "llmMissing": "No LLM configured (set LLM_API_KEY in .env, then restart the backend)",
+    "contextFolders": "Context folders",
+    "contextHint": "Attach local folders (code, notes, …) to this document. When you chat with the AI about it, the folders' text files get read and spliced into the prompt — capped by total character count, skipping .git / node_modules / binaries.",
+    "contextEmpty": "No folders bound yet. Click \"Add folder\" below to attach one.",
+    "contextAdd": "Add folder",
+    "contextAddPrompt": "Enter an absolute path to a local folder (e.g. /Users/me/projects/foo):",
+    "contextAdded": "Folder attached",
+    "contextRemove": "Unbind",
+    "contextMissing": "folder is missing or has been moved",
+    "contextStats": "{n} files · {size}"
   },
   "editor": {
     "back": "Back",
@@ -51,7 +60,15 @@
     "pick": "Pick",
     "pickElement": "Click an element in the preview (press again or Esc to cancel)",
     "pickAttached": "picked {tag}",
-    "clearPicked": "Clear picked element"
+    "clearPicked": "Clear picked element",
+    "modeAgent": "Agent",
+    "modeChat": "Chat",
+    "modeAgentTip": "Agent · let the AI write or edit this document directly",
+    "modeChatTip": "Chat · talk about this document without changing it",
+    "newChat": "New chat",
+    "newChatConfirm": "Start a new chat? The current history will be cleared.",
+    "dragHeight": "Drag up/down to resize the input",
+    "chatModeNotice": "Chat mode: the AI will only reply with text and won't touch the document. Switch back to Agent to edit."
   },
   "settings": {
     "title": "Settings · Agent",

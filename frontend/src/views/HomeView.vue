@@ -58,15 +58,39 @@
       <p v-if="!loading && docs.length === 0" class="muted empty">{{ t('home.noDocs') }}</p>
       <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
       <ul class="doc-list">
-        <li v-for="d in docs" :key="d.path" @click="open(d.path)">
-          <span class="d-icon">📄</span>
-          <span class="d-title">{{ d.title || d.name }}</span>
-          <span class="d-path muted">{{ d.path }}</span>
-          <span class="d-acts">
-            <button class="d-act" :title="t('editor.rename')" @click.stop="renameDoc(d)">✎</button>
-            <button class="d-act danger" :title="t('editor.delete')" @click.stop="removeDoc(d)">🗑</button>
-          </span>
-          <span class="d-time muted">{{ fmtTime(d.mtime) }}</span>
+        <li v-for="d in docs" :key="d.path" class="doc-li" :class="{ expanded: ctxOpen === d.path }">
+          <div class="doc-row" @click="open(d.path)">
+            <span class="d-icon">📄</span>
+            <span class="d-title">{{ d.title || d.name }}</span>
+            <span class="d-path muted">{{ d.path }}</span>
+            <span class="d-acts">
+              <button
+                class="d-act ctx-btn"
+                :class="{ active: ctxOpen === d.path, has: (ctxFolders[d.path] || []).length > 0 }"
+                :title="t('home.contextFolders')"
+                @click.stop="toggleCtx(d.path)"
+              >📁<span v-if="(ctxFolders[d.path] || []).length" class="ctx-n">{{ ctxFolders[d.path].length }}</span></button>
+              <button class="d-act" :title="t('editor.rename')" @click.stop="renameDoc(d)">✎</button>
+              <button class="d-act danger" :title="t('editor.delete')" @click.stop="removeDoc(d)">🗑</button>
+            </span>
+            <span class="d-time muted">{{ fmtTime(d.mtime) }}</span>
+          </div>
+          <div v-if="ctxOpen === d.path" class="ctx-panel" @click.stop>
+            <div class="ctx-head muted">{{ t('home.contextHint') }}</div>
+            <ul v-if="(ctxFolders[d.path] || []).length" class="ctx-list">
+              <li v-for="f in ctxFolders[d.path]" :key="f.path" :class="{ missing: f.missing }">
+                <span class="ctx-name">📁 {{ f.name }}</span>
+                <span class="ctx-meta muted">
+                  <template v-if="f.missing">{{ t('home.contextMissing') }}</template>
+                  <template v-else>{{ t('home.contextStats', { n: f.fileCount, size: fmtBytes(f.totalBytes) }) }}</template>
+                </span>
+                <code class="ctx-path muted" :title="f.path">{{ f.path }}</code>
+                <button class="ctx-rm" :title="t('home.contextRemove')" @click="removeCtx(d.path, f.path)">×</button>
+              </li>
+            </ul>
+            <div v-else class="ctx-empty muted">{{ t('home.contextEmpty') }}</div>
+            <button class="ghost ctx-add" :disabled="ctxBusy" @click="addCtx(d.path)">＋ {{ t('home.contextAdd') }}</button>
+          </div>
         </li>
       </ul>
     </section>
@@ -79,6 +103,12 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getWorkspace, setWorkspace } from '@/api/workspace'
 import { listDocuments, createDocument, getDocument, deleteDocument, renameDocument } from '@/api/documents'
+import {
+  listAllContextFolders,
+  listContextFolders,
+  addContextFolder,
+  removeContextFolder
+} from '@/api/context'
 import { pushToast } from '@/composables/useToast'
 import { EXAMPLES } from '@/examples'
 import SettingsModal from '@/components/SettingsModal.vue'
@@ -95,6 +125,14 @@ const newName = ref('')
 const creating = ref(false)
 const examples = EXAMPLES
 
+// Per-document context folders (homepage UI). `ctxFolders` keeps the full
+// summary array for every doc that has bindings; the badge on each doc row
+// reads the length. `ctxOpen` is the path of the doc whose expanded panel
+// is currently visible (single-open accordion behaviour).
+const ctxFolders = ref({})
+const ctxOpen = ref('')
+const ctxBusy = ref(false)
+
 watch(locale, (v) => localStorage.setItem('phial.locale', v))
 
 async function load() {
@@ -104,11 +142,85 @@ async function load() {
     workspace.value = ws
     if (ws.agent) agent.value = ws.agent
     docs.value = await listDocuments()
+    await loadContextMap()
   } catch (e) {
     pushToast(e.message, 'error')
   } finally {
     loading.value = false
   }
+}
+
+async function loadContextMap() {
+  // Best-effort — failing here shouldn't break the home page; users just
+  // won't see badges until they open a doc's context panel manually.
+  try {
+    const { byDoc } = await listAllContextFolders()
+    ctxFolders.value = byDoc || {}
+  } catch (e) {
+    // Keep going silently; no toast — too noisy on every page load.
+    ctxFolders.value = {}
+  }
+}
+
+async function toggleCtx(docPath) {
+  if (ctxOpen.value === docPath) {
+    ctxOpen.value = ''
+    return
+  }
+  ctxOpen.value = docPath
+  // Refresh this doc's list on open so stale counts (folder moved on disk,
+  // file count changed since last home-page load) get corrected.
+  try {
+    const { folders } = await listContextFolders(docPath)
+    ctxFolders.value = { ...ctxFolders.value, [docPath]: folders }
+  } catch (e) {
+    pushToast(e.message, 'error')
+  }
+}
+
+async function addCtx(docPath) {
+  if (ctxBusy.value) return
+  // Browsers can't natively pick a folder by *absolute path*; the File System
+  // Access API doesn't return one, and dialogs are sandboxed. The workspace
+  // picker (`changeWorkspace`) uses the same pattern — keep consistent.
+  const folder = window.prompt(t('home.contextAddPrompt'))
+  if (!folder || !folder.trim()) return
+  ctxBusy.value = true
+  try {
+    const { folders } = await addContextFolder(docPath, folder.trim())
+    ctxFolders.value = { ...ctxFolders.value, [docPath]: folders }
+    pushToast(t('home.contextAdded'), 'success')
+  } catch (e) {
+    pushToast(e.message, 'error')
+  } finally {
+    ctxBusy.value = false
+  }
+}
+
+async function removeCtx(docPath, folder) {
+  if (ctxBusy.value) return
+  ctxBusy.value = true
+  try {
+    const { folders } = await removeContextFolder(docPath, folder)
+    // Drop the key entirely when the list is empty so the badge disappears
+    // instead of showing "0".
+    const next = { ...ctxFolders.value }
+    if (folders.length) next[docPath] = folders
+    else delete next[docPath]
+    ctxFolders.value = next
+  } catch (e) {
+    pushToast(e.message, 'error')
+  } finally {
+    ctxBusy.value = false
+  }
+}
+
+function fmtBytes(n) {
+  if (!n || n <= 0) return '0 B'
+  const k = 1024
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(k)))
+  return `${(n / Math.pow(k, i)).toFixed(i ? 1 : 0)} ${units[i]}`
 }
 
 function onAgentSaved(active) {
@@ -248,16 +360,20 @@ h1 { margin: 0; font-size: 24px; }
 .docs h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
 .empty { padding: 24px 0; }
 .doc-list { list-style: none; margin: 0; padding: 0; }
-.doc-list li {
-  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border);
-  border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; background: var(--bg-panel);
+.doc-li {
+  border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px;
+  background: var(--bg-panel); overflow: hidden;
 }
-.doc-list li:hover { border-color: var(--accent); background: #faf5ff; }
+.doc-li.expanded { border-color: var(--accent); background: #faf5ff; }
+.doc-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer;
+}
+.doc-li:hover { border-color: var(--accent); background: #faf5ff; }
 .d-icon { font-size: 15px; flex: none; }
 .d-title { font-weight: 500; flex: none; }
 .d-path { font-family: var(--mono); font-size: 11.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .d-acts { margin-left: auto; display: flex; gap: 2px; flex: none; opacity: 0; }
-.doc-list li:hover .d-acts { opacity: 1; }
+.doc-li:hover .d-acts, .doc-li.expanded .d-acts { opacity: 1; }
 .d-act {
   border: 0; background: transparent; padding: 2px 6px; font-size: 12px; line-height: 1;
   border-radius: 5px; color: var(--text-dim);
@@ -265,4 +381,43 @@ h1 { margin: 0; font-size: 24px; }
 .d-act:hover { background: var(--bg-soft); color: var(--text); }
 .d-act.danger:hover { background: #fef2f2; color: var(--danger); }
 .d-time { font-size: 11.5px; white-space: nowrap; flex: none; }
+
+/* Context-folders affordance: badge on the row, panel below when open. */
+.ctx-btn { display: inline-flex; align-items: center; gap: 3px; }
+.ctx-btn.has { color: var(--accent); opacity: 1; }
+.doc-li .ctx-btn.has { opacity: 1; }  /* always visible when folders are bound */
+.ctx-btn.active { background: var(--accent-soft); color: var(--accent); }
+.ctx-n {
+  font-size: 10.5px; min-width: 14px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: white; line-height: 1.4;
+}
+.ctx-btn.active .ctx-n, .ctx-btn:not(.has) .ctx-n { background: var(--text-dim); }
+
+.ctx-panel {
+  border-top: 1px dashed var(--border); padding: 10px 14px 12px;
+  background: rgba(124, 58, 237, 0.04);
+}
+.ctx-head { font-size: 11.5px; margin-bottom: 8px; line-height: 1.5; }
+.ctx-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ctx-list li {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12.5px;
+}
+.ctx-list li.missing { border-color: #fca5a5; background: #fef2f2; }
+.ctx-name { font-weight: 500; flex: none; }
+.ctx-meta { font-size: 11.5px; flex: none; }
+.ctx-path {
+  font-family: var(--mono); font-size: 11px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: var(--bg-soft); padding: 1px 6px; border-radius: 4px;
+}
+.ctx-rm {
+  border: 0; background: transparent; color: var(--text-dim);
+  font-size: 16px; line-height: 1; padding: 0 6px; border-radius: 4px;
+  cursor: pointer; flex: none;
+}
+.ctx-rm:hover { background: #fef2f2; color: var(--danger); }
+.ctx-empty { font-size: 12px; padding: 4px 0 8px; }
+.ctx-add { font-size: 12px; padding: 4px 10px; }
 </style>
