@@ -117,7 +117,31 @@
     "saved": "已切换到 {name}"
   },
   "blocks": {
-    "placeholder": "在这里写正文 —— # / - / > 这类 Markdown 简写都能用；斜杠菜单在下一版加。"
+    "placeholder": "在这里写正文 —— 输入 / 召唤块菜单，或用 # / - / > / ``` 这类 Markdown 简写。",
+    "handleTip": "拖动可移动 · 点击查看操作",
+    "slashEmpty": "没有匹配「{q}」的块",
+    "imagePrompt": "图片 URL：",
+    "items": {
+      "paragraph": "正文",
+      "h1": "一级标题",
+      "h2": "二级标题",
+      "h3": "三级标题",
+      "ul": "无序列表",
+      "ol": "有序列表",
+      "task": "待办列表",
+      "quote": "引用",
+      "code": "代码块",
+      "divider": "分割线",
+      "image": "图片"
+    },
+    "hints": {
+      "paragraph": "普通段落"
+    },
+    "menu": {
+      "turnInto": "转换为",
+      "duplicate": "复制",
+      "delete": "删除"
+    }
   },
   "common": { "cancel": "取消", "confirm": "确定", "loading": "加载中…", "language": "语言" }
 }
