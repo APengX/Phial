@@ -25,9 +25,13 @@
   },
   "editor": {
     "back": "返回",
+    "blocks": "块",
     "source": "HTML 源码",
     "preview": "预览",
     "split": "分栏",
+    "blocksUnsupportedTitle": "块编辑暂不支持这篇文档",
+    "blocksUnsupportedBody": "这篇文档里有 <script>（交互式 widget）。直接在块视图里改会把它丢掉。先切到「源码」编辑；之后的「Widget 块」(PR 3) 落地后就能在块视图里整段编辑这种内容了。",
+    "switchToSource": "切到源码",
     "save": "保存",
     "saved": "已保存",
     "unsaved": "未保存",
@@ -111,6 +115,9 @@
     "willRun": "将运行",
     "save": "保存",
     "saved": "已切换到 {name}"
+  },
+  "blocks": {
+    "placeholder": "在这里写正文 —— # / - / > 这类 Markdown 简写都能用；斜杠菜单在下一版加。"
   },
   "common": { "cancel": "取消", "confirm": "确定", "loading": "加载中…", "language": "语言" }
 }

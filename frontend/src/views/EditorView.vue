@@ -18,6 +18,7 @@
       </div>
 
       <div class="modes">
+        <button :class="{ active: viewMode === 'blocks' }" @click="viewMode = 'blocks'">{{ t('editor.blocks') }}</button>
         <button :class="{ active: viewMode === 'source' }" @click="viewMode = 'source'">{{ t('editor.source') }}</button>
         <button :class="{ active: viewMode === 'split' }" @click="viewMode = 'split'">{{ t('editor.split') }}</button>
         <button :class="{ active: viewMode === 'preview' }" @click="viewMode = 'preview'">{{ t('editor.preview') }}</button>
@@ -65,12 +66,28 @@
         />
       </aside>
 
-      <!-- center: source / preview / split -->
+      <!-- center: blocks / source / preview / split -->
       <main class="center">
-        <div v-show="viewMode !== 'preview'" class="pane editor-pane" :class="{ half: viewMode === 'split' }">
+        <!-- Blocks view: visual rich-text editor. Replaces the source pane in
+             this mode. Docs with <script> get a "switch to Source" banner
+             instead — PR 3 will land widget blocks for those. -->
+        <div v-if="viewMode === 'blocks'" class="pane blocks-pane">
+          <div v-if="isInteractiveDoc" class="blocks-fallback">
+            <div class="bf-card">
+              <h3>{{ t('editor.blocksUnsupportedTitle') }}</h3>
+              <p class="muted">{{ t('editor.blocksUnsupportedBody') }}</p>
+              <button class="primary" @click="viewMode = 'source'">
+                {{ t('editor.switchToSource') }}
+              </button>
+            </div>
+          </div>
+          <BlockEditor v-else v-model="editorHtml" @save="save" />
+        </div>
+
+        <div v-show="viewMode === 'source' || viewMode === 'split'" class="pane editor-pane" :class="{ half: viewMode === 'split' }">
           <HtmlEditor v-model="editorHtml" @save="save" />
         </div>
-        <div v-show="viewMode !== 'source'" class="pane preview-pane" :class="{ half: viewMode === 'split' }">
+        <div v-show="viewMode === 'preview' || viewMode === 'split'" class="pane preview-pane" :class="{ half: viewMode === 'split' }">
           <SandboxPreview
             :html="editorHtml"
             :settings="render"
@@ -111,11 +128,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import FileTree from '@/components/FileTree.vue'
 import HtmlEditor from '@/components/HtmlEditor.vue'
+// TipTap + extensions weigh ~800 KB minified; load only when the user actually
+// enters Blocks mode so the source/split/preview path stays small.
+const BlockEditor = defineAsyncComponent(() => import('@/components/BlockEditor.vue'))
 import SandboxPreview from '@/components/SandboxPreview.vue'
 import AiPanel from '@/components/AiPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
@@ -160,6 +180,10 @@ let aiResizeStart = null
 
 const dirty = computed(() => editorHtml.value !== savedHtml.value)
 const agentReady = computed(() => agent.value.ready !== false)
+// Block editor (PR 1) can't safely round-trip docs with <script> — those need
+// the widget-block work landing in PR 3. Until then, Blocks mode shows a
+// "switch to Source" banner for interactive docs.
+const isInteractiveDoc = computed(() => /<script\b/i.test(editorHtml.value || ''))
 
 async function loadWorkspace() {
   try {
@@ -342,7 +366,11 @@ function onAiApply(html) {
   if (html == null || html === editorHtml.value) return
   editorHtml.value = html
   interfaceState.value = null
+  // Surface the result: from pure source view, show the preview alongside;
+  // from blocks view, if the AI brought back interactive HTML, drop into
+  // source so the user sees what landed rather than just the fallback card.
   if (viewMode.value === 'source') viewMode.value = 'split'
+  else if (viewMode.value === 'blocks' && /<script\b/i.test(html)) viewMode.value = 'source'
 }
 
 // --- pick element from the preview ---------------------------------------
@@ -454,6 +482,14 @@ onBeforeUnmount(() => {
 .editor-pane { flex: 1; border-right: 1px solid var(--border); }
 .preview-pane { flex: 1; display: flex; flex-direction: column; background: #fff; }
 .pane.half { flex: 1 1 50%; width: 50%; }
+.blocks-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg, #fff); min-width: 0; }
+.blocks-fallback { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.bf-card {
+  max-width: 460px; padding: 22px 24px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--bg-panel);
+}
+.bf-card h3 { margin: 0 0 8px; font-size: 15px; }
+.bf-card p { margin: 0 0 14px; font-size: 13px; line-height: 1.55; }
 .ai-side { width: 380px; min-width: 380px; border-left: 1px solid var(--border); position: relative; }
 .ai-resizer {
   position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 6;

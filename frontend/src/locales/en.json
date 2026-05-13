@@ -25,9 +25,13 @@
   },
   "editor": {
     "back": "Back",
+    "blocks": "Blocks",
     "source": "HTML source",
     "preview": "Preview",
     "split": "Split",
+    "blocksUnsupportedTitle": "Block editing isn't ready for this document yet",
+    "blocksUnsupportedBody": "This document contains a <script> tag (an interactive widget). The block editor would strip it on save. Switch to Source — the upcoming widget block (PR 3) will let you keep editing it visually.",
+    "switchToSource": "Switch to Source",
     "save": "Save",
     "saved": "Saved",
     "unsaved": "Unsaved",
@@ -111,6 +115,9 @@
     "willRun": "Will run",
     "save": "Save",
     "saved": "Switched to {name}"
+  },
+  "blocks": {
+    "placeholder": "Write here — Markdown shortcuts like # / - / > work; slash menu lands in the next update."
   },
   "common": { "cancel": "Cancel", "confirm": "OK", "loading": "Loading…", "language": "Language" }
 }
