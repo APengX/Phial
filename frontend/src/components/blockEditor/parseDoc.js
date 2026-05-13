@@ -19,9 +19,24 @@ const PROSE_TAGS = new Set([
   'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
   'UL', 'OL', 'BLOCKQUOTE', 'PRE', 'HR',
   'FIGURE', 'IMG',
+  // PR 4 schema additions — TipTap can parse these into proper block nodes,
+  // so they should ride through as prose instead of being collapsed into a
+  // widget block.
+  'TABLE', 'DETAILS',
 ])
 
 const PLACEHOLDER_TAG = 'div'
+
+// One place to ask "can TipTap render this top-level element?". A few shapes
+// (notably the column container) carry a `data-phial-*` marker that the
+// custom nodes' parseHTML rules key off — we mirror that check here so the
+// splitter doesn't swallow them into a widget.
+function isProseShape(el) {
+  const tag = el.tagName
+  if (PROSE_TAGS.has(tag)) return true
+  if (tag === 'DIV' && el.hasAttribute('data-phial-columns')) return true
+  return false
+}
 
 export function splitProseAndWidgets(bodyHtml) {
   if (!bodyHtml || !bodyHtml.trim()) return ''
@@ -42,8 +57,11 @@ export function splitProseAndWidgets(bodyHtml) {
     if (node.nodeType === 1) {
       const tag = node.tagName
       const html = node.outerHTML
+      // Anything carrying / containing a <script> is widget regardless of
+      // shape — a `<details>` with embedded JS still can't be safely round-
+      // tripped through the prose editor.
       const hasScript = tag === 'SCRIPT' || node.querySelector?.('script') != null
-      const isProse = PROSE_TAGS.has(tag) && !hasScript
+      const isProse = isProseShape(node) && !hasScript
       if (isProse) {
         flushWidget()
         parts.push(html)

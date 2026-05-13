@@ -118,6 +118,7 @@
     "handleTip": "Drag to move · click for options",
     "slashEmpty": "No blocks match \"{q}\"",
     "imagePrompt": "Image URL:",
+    "toggleDefault": "Toggle",
     "items": {
       "paragraph": "Text",
       "h1": "Heading 1",
@@ -129,7 +130,11 @@
       "quote": "Quote",
       "code": "Code block",
       "divider": "Divider",
-      "image": "Image"
+      "image": "Image",
+      "table": "Table",
+      "toggle": "Toggle",
+      "cols2": "2 columns",
+      "cols3": "3 columns"
     },
     "hints": {
       "paragraph": "Plain paragraph"

@@ -79,11 +79,18 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { DragHandle } from '@tiptap/extension-drag-handle-vue-3'
 import { useI18n } from 'vue-i18n'
 
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+
 import { SlashCommands } from './blockEditor/slashCommands'
 import SlashMenuList from './blockEditor/SlashMenuList.vue'
 import BlockHandleMenu from './blockEditor/BlockHandleMenu.vue'
 import { PhialWidget } from './blockEditor/PhialWidget'
 import WidgetEditModal from './blockEditor/WidgetEditModal.vue'
+import { Toggle, ToggleSummary } from './blockEditor/Toggle'
+import { Columns, Column } from './blockEditor/Columns'
 import { splitProseAndWidgets, unwrapWidgets } from './blockEditor/parseDoc'
 
 const props = defineProps({
@@ -205,6 +212,50 @@ function buildSlashItems() {
         editor.chain().focus().deleteRange(range).run()
         if (src) editor.chain().focus().setImage({ src }).run()
       },
+    },
+    {
+      key: 'table', icon: '⊞', title: t('blocks.items.table'), hint: '3×3',
+      keywords: 'table grid rows columns 表格',
+      command: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range)
+          .insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    },
+    {
+      key: 'toggle', icon: '▸', title: t('blocks.items.toggle'), hint: '<details>',
+      keywords: 'toggle collapse collapsible details summary 折叠',
+      command: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'toggle',
+          content: [
+            { type: 'toggleSummary', content: [{ type: 'text', text: t('blocks.toggleDefault') }] },
+            { type: 'paragraph' },
+          ],
+        }).run(),
+    },
+    {
+      key: 'cols2', icon: '◫◫', title: t('blocks.items.cols2'), hint: '2',
+      keywords: 'columns 2 two layout split 列',
+      command: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'columns',
+          content: [
+            { type: 'column', content: [{ type: 'paragraph' }] },
+            { type: 'column', content: [{ type: 'paragraph' }] },
+          ],
+        }).run(),
+    },
+    {
+      key: 'cols3', icon: '◫◫◫', title: t('blocks.items.cols3'), hint: '3',
+      keywords: 'columns 3 three layout split 列',
+      command: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'columns',
+          content: [
+            { type: 'column', content: [{ type: 'paragraph' }] },
+            { type: 'column', content: [{ type: 'paragraph' }] },
+            { type: 'column', content: [{ type: 'paragraph' }] },
+          ],
+        }).run(),
     },
   ]
 }
@@ -407,6 +458,14 @@ const editor = useEditor({
     Image.configure({ inline: false, allowBase64: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
+    Table.configure({ resizable: true, allowTableNodeSelection: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    Toggle,
+    ToggleSummary,
+    Columns,
+    Column,
     Placeholder.configure({
       placeholder: () => t('blocks.placeholder'),
     }),
@@ -567,6 +626,96 @@ defineExpose({
 :deep(.ProseMirror ul[data-type="taskList"] li > div) { flex: 1; }
 :deep(.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div) {
   color: var(--text-dim, #6b7280); text-decoration: line-through;
+}
+
+/* Tables — TipTap wraps tables in .tableWrapper for horizontal-scroll
+   support. Header row is .ProseMirror th; we give cells a min-width so the
+   table doesn't collapse to nothing on empty cells. selectedCell is the
+   class TipTap adds when a cell range is being selected. */
+:deep(.ProseMirror .tableWrapper) {
+  margin: 0.6em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+:deep(.ProseMirror table) {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+:deep(.ProseMirror table td),
+:deep(.ProseMirror table th) {
+  border: 1px solid var(--border, #e4e6eb);
+  padding: 6px 10px;
+  min-width: 80px;
+  vertical-align: top;
+  position: relative;
+}
+:deep(.ProseMirror table th) {
+  background: var(--bg-soft, #f8f8f9);
+  font-weight: 600;
+  text-align: left;
+}
+:deep(.ProseMirror table .selectedCell::after) {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--accent-soft, #ede9fe);
+  opacity: .45;
+  pointer-events: none;
+}
+:deep(.ProseMirror table .column-resize-handle) {
+  position: absolute;
+  right: -2px; top: 0; bottom: -2px;
+  width: 4px;
+  background: var(--accent, #6d28d9);
+  pointer-events: none;
+}
+
+/* Toggle — uses native <details>/<summary>. We always force open in the
+   editor so authors can see their content; the saved HTML keeps `open` (the
+   reader's first view), which they can strip in Source if they want a
+   collapsed default. PR 5 will give authors a chevron control. */
+:deep(.ProseMirror details) {
+  border-left: 2px solid var(--border, #e4e6eb);
+  padding: 4px 0 4px 12px;
+  margin: 0.4em 0;
+}
+:deep(.ProseMirror details > summary) {
+  cursor: default;
+  font-weight: 500;
+  list-style: none;
+  outline: none;
+  padding-left: 18px;
+  position: relative;
+}
+:deep(.ProseMirror details > summary::-webkit-details-marker) { display: none; }
+:deep(.ProseMirror details > summary::before) {
+  content: "▾";
+  position: absolute;
+  left: 0; top: 0;
+  font-size: 11px;
+  color: var(--text-dim, #6b7280);
+  line-height: 1.7;
+}
+:deep(.ProseMirror details > summary + *) { margin-top: 4px; }
+
+/* Columns — flex layout with equal-width children + an inter-column gap.
+   `min-width: 0` on the child lets long content (e.g. code) shrink rather
+   than blow out the row. */
+:deep(.ProseMirror .phial-columns) {
+  display: flex;
+  gap: 16px;
+  margin: 0.6em 0;
+  align-items: stretch;
+}
+:deep(.ProseMirror .phial-column) {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+}
+:deep(.ProseMirror .phial-column:hover) {
+  border-color: var(--border, #e4e6eb);
 }
 
 /* Placeholder */

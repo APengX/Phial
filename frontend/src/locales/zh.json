@@ -118,6 +118,7 @@
     "handleTip": "拖动可移动 · 点击查看操作",
     "slashEmpty": "没有匹配「{q}」的块",
     "imagePrompt": "图片 URL：",
+    "toggleDefault": "折叠块",
     "items": {
       "paragraph": "正文",
       "h1": "一级标题",
@@ -129,7 +130,11 @@
       "quote": "引用",
       "code": "代码块",
       "divider": "分割线",
-      "image": "图片"
+      "image": "图片",
+      "table": "表格",
+      "toggle": "折叠块",
+      "cols2": "两列",
+      "cols3": "三列"
     },
     "hints": {
       "paragraph": "普通段落"
