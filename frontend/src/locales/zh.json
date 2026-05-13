@@ -131,6 +131,7 @@
       "code": "代码块",
       "divider": "分割线",
       "image": "图片",
+      "callout": "提示框",
       "table": "表格",
       "toggle": "折叠块",
       "cols2": "两列",
@@ -143,6 +144,25 @@
       "turnInto": "转换为",
       "duplicate": "复制",
       "delete": "删除"
+    },
+    "callout": {
+      "pickIcon": "选个图标"
+    },
+    "toggle": {
+      "savedOpen": "默认展开 —— 点一下改成默认收起",
+      "savedClosed": "默认收起 —— 点一下改成默认展开"
+    },
+    "image": {
+      "tooLarge": "「{name}」超过 {max}，换张小一点的"
+    },
+    "table": {
+      "rowAbove": "上方插入行",
+      "rowBelow": "下方插入行",
+      "colLeft": "左侧插入列",
+      "colRight": "右侧插入列",
+      "delRow": "删除行",
+      "delCol": "删除列",
+      "delTable": "删除表格"
     },
     "widget": {
       "badge": "Widget",

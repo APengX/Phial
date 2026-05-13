@@ -24,10 +24,18 @@
       :open="handleMenu.open"
       :top="handleMenu.top"
       :left="handleMenu.left"
+      :node-type="handleMenu.target?.node?.type?.name || ''"
       @turn-into="onTurnInto"
       @duplicate="onDuplicateBlock"
       @delete="onDeleteBlock"
       @close="handleMenu.open = false"
+    />
+
+    <TableToolbar
+      :open="tableToolbar.open"
+      :top="tableToolbar.top"
+      :left="tableToolbar.left"
+      :editor="editor"
     />
 
     <SlashMenuList
@@ -91,6 +99,8 @@ import { PhialWidget } from './blockEditor/PhialWidget'
 import WidgetEditModal from './blockEditor/WidgetEditModal.vue'
 import { Toggle, ToggleSummary } from './blockEditor/Toggle'
 import { Columns, Column } from './blockEditor/Columns'
+import { Callout } from './blockEditor/Callout'
+import TableToolbar from './blockEditor/TableToolbar.vue'
 import { splitProseAndWidgets, unwrapWidgets } from './blockEditor/parseDoc'
 
 const props = defineProps({
@@ -205,13 +215,24 @@ function buildSlashItems() {
         editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
     },
     {
-      key: 'image', icon: '🖼', title: t('blocks.items.image'), hint: 'URL',
-      keywords: 'image img picture photo 图',
+      key: 'image', icon: '🖼', title: t('blocks.items.image'), hint: 'upload',
+      keywords: 'image img picture photo upload 图 上传',
       command: ({ editor, range }) => {
-        const src = window.prompt(t('blocks.imagePrompt'))
+        // Strip the `/query` text first so the picker dialog doesn't leave
+        // it behind if the user cancels mid-flow.
         editor.chain().focus().deleteRange(range).run()
-        if (src) editor.chain().focus().setImage({ src }).run()
+        pickAndInsertImage()
       },
+    },
+    {
+      key: 'callout', icon: '💡', title: t('blocks.items.callout'),
+      keywords: 'callout note tip aside info warning 提示 注释',
+      command: ({ editor, range }) =>
+        editor.chain().focus().deleteRange(range).insertContent({
+          type: 'callout',
+          attrs: { icon: '💡' },
+          content: [{ type: 'paragraph' }],
+        }).run(),
     },
     {
       key: 'table', icon: '⊞', title: t('blocks.items.table'), hint: '3×3',
@@ -428,6 +449,81 @@ function onDeleteBlock() {
   })
 }
 
+// ─── image upload ─────────────────────────────────────────────────────────
+// Images are inlined as base64 data URLs (Image extension configured with
+// allowBase64: true). Phial docs are designed to be portable single .html
+// files, so embedding matches the format's ethos — no asset folder, no
+// resolver, the doc opens in any browser as-is. The trade-off is doc size
+// for large images; PR-future could add an out-of-line "save as workspace
+// asset" path for users who care.
+
+const MAX_IMG_BYTES = 4 * 1024 * 1024  // 4 MB — soft ceiling to keep docs sane
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result)
+    fr.onerror = () => reject(fr.error)
+    fr.readAsDataURL(file)
+  })
+}
+
+async function insertImageFiles(files) {
+  const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'))
+  if (!imgs.length || !editor.value) return
+  for (const f of imgs) {
+    if (f.size > MAX_IMG_BYTES) {
+      window.alert(t('blocks.image.tooLarge', { name: f.name, max: '4 MB' }))
+      continue
+    }
+    try {
+      const url = await readAsDataUrl(f)
+      editor.value.chain().focus().setImage({ src: url, alt: f.name }).run()
+    } catch {
+      // Silent — the image just doesn't get inserted.
+    }
+  }
+}
+
+function pickAndInsertImage() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.multiple = true
+  input.addEventListener('change', () => {
+    if (input.files?.length) insertImageFiles(input.files)
+  })
+  input.click()
+}
+
+// ─── table toolbar ────────────────────────────────────────────────────────
+// Shown when the cursor is inside a table cell. Position derived from the
+// table's bounding rect; updated on every selection change (cheap — TipTap
+// fires selectionUpdate only on actual selection changes).
+const tableToolbar = reactive({ open: false, top: 0, left: 0 })
+
+function updateTableToolbar(ed) {
+  if (!ed) { tableToolbar.open = false; return }
+  if (!ed.isActive('table')) { tableToolbar.open = false; return }
+  // Walk up from the cursor's resolved position to find the enclosing table.
+  const { from } = ed.state.selection
+  const $pos = ed.state.doc.resolve(from)
+  let depth = $pos.depth
+  while (depth > 0 && $pos.node(depth).type.name !== 'table') depth--
+  if (depth <= 0) { tableToolbar.open = false; return }
+  const tableStart = $pos.before(depth)
+  const dom = ed.view.nodeDOM(tableStart)
+  // TipTap wraps tables in a .tableWrapper; use the wrapper rect when
+  // available so the toolbar straddles the table's actual visual extent
+  // (including overflow-x scroll, when narrow).
+  const target = dom?.closest?.('.tableWrapper') || dom
+  if (!target) { tableToolbar.open = false; return }
+  const r = target.getBoundingClientRect()
+  tableToolbar.top = Math.max(8, r.top - 34)
+  tableToolbar.left = r.left
+  tableToolbar.open = true
+}
+
 // ─── widget edit modal ────────────────────────────────────────────────────
 // PhialWidget's NodeView calls onEditRequest({ html, update }) with the
 // widget's current HTML and a setter that writes the new value back to the
@@ -466,6 +562,7 @@ const editor = useEditor({
     ToggleSummary,
     Columns,
     Column,
+    Callout,
     Placeholder.configure({
       placeholder: () => t('blocks.placeholder'),
     }),
@@ -498,7 +595,36 @@ const editor = useEditor({
       }
       return false
     },
+    // Drop & paste image files → insert as base64. Returning `true` tells
+    // ProseMirror we handled the event so the default (paste-as-text /
+    // browser drop) doesn't fire.
+    handleDrop(_view, event) {
+      const files = event.dataTransfer?.files
+      if (!files?.length) return false
+      const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'))
+      if (!imgs.length) return false
+      event.preventDefault()
+      insertImageFiles(imgs)
+      return true
+    },
+    handlePaste(_view, event) {
+      const items = event.clipboardData?.items
+      if (!items?.length) return false
+      const imgs = []
+      for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile()
+          if (f) imgs.push(f)
+        }
+      }
+      if (!imgs.length) return false
+      event.preventDefault()
+      insertImageFiles(imgs)
+      return true
+    },
   },
+  onSelectionUpdate: ({ editor }) => updateTableToolbar(editor),
+  onTransaction: ({ editor }) => updateTableToolbar(editor),
 })
 
 function applyExternal(html) {
@@ -670,33 +796,8 @@ defineExpose({
   pointer-events: none;
 }
 
-/* Toggle — uses native <details>/<summary>. We always force open in the
-   editor so authors can see their content; the saved HTML keeps `open` (the
-   reader's first view), which they can strip in Source if they want a
-   collapsed default. PR 5 will give authors a chevron control. */
-:deep(.ProseMirror details) {
-  border-left: 2px solid var(--border, #e4e6eb);
-  padding: 4px 0 4px 12px;
-  margin: 0.4em 0;
-}
-:deep(.ProseMirror details > summary) {
-  cursor: default;
-  font-weight: 500;
-  list-style: none;
-  outline: none;
-  padding-left: 18px;
-  position: relative;
-}
-:deep(.ProseMirror details > summary::-webkit-details-marker) { display: none; }
-:deep(.ProseMirror details > summary::before) {
-  content: "▾";
-  position: absolute;
-  left: 0; top: 0;
-  font-size: 11px;
-  color: var(--text-dim, #6b7280);
-  line-height: 1.7;
-}
-:deep(.ProseMirror details > summary + *) { margin-top: 4px; }
+/* Toggle styling lives in ToggleView.vue (NodeView) now — it owns the
+   chevron control + the in-editor "always open" rendering. */
 
 /* Columns — flex layout with equal-width children + an inter-column gap.
    `min-width: 0` on the child lets long content (e.g. code) shrink rather

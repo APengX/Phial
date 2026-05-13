@@ -131,6 +131,7 @@
       "code": "Code block",
       "divider": "Divider",
       "image": "Image",
+      "callout": "Callout",
       "table": "Table",
       "toggle": "Toggle",
       "cols2": "2 columns",
@@ -143,6 +144,25 @@
       "turnInto": "Turn into",
       "duplicate": "Duplicate",
       "delete": "Delete"
+    },
+    "callout": {
+      "pickIcon": "Pick an icon"
+    },
+    "toggle": {
+      "savedOpen": "Saved as expanded — click to save as collapsed",
+      "savedClosed": "Saved as collapsed — click to save as expanded"
+    },
+    "image": {
+      "tooLarge": "“{name}” is over {max}; pick a smaller image"
+    },
+    "table": {
+      "rowAbove": "Insert row above",
+      "rowBelow": "Insert row below",
+      "colLeft": "Insert column left",
+      "colRight": "Insert column right",
+      "delRow": "Delete row",
+      "delCol": "Delete column",
+      "delTable": "Delete table"
     },
     "widget": {
       "badge": "Widget",

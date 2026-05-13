@@ -6,8 +6,13 @@
     :style="{ top: top + 'px', left: left + 'px' }"
     @click.stop
   >
-    <!-- Turn into: pops a submenu of block types on hover/click -->
+    <!-- Turn into is only meaningful for "simple" blocks where one node type
+         can sensibly replace another. For widgets / tables / columns /
+         toggles, the conversion would lose structure (and TipTap's
+         set/toggle commands no-op on them anyway), so the section is
+         hidden — keeps the menu tidy and avoids surprising the user. -->
     <div
+      v-if="turnIntoApplicable"
       class="blk-row has-sub"
       @mouseenter="subOpen = true"
       @mouseleave="subOpen = false"
@@ -49,19 +54,33 @@
 // when you click the ⋮⋮ handle: Turn into ▸ / Duplicate / Delete. The
 // menu is purely a UI emitter — the editor commands run in BlockEditor.vue
 // where we have the editor instance and the currently-hovered node + pos.
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps({
+const props = defineProps({
   open: { type: Boolean, default: false },
   top: { type: Number, default: 0 },
   left: { type: Number, default: 0 },
+  // Node type name of the block under the handle (TipTap node name, e.g.
+  // 'paragraph', 'heading', 'table', 'phialWidget'). Drives whether the
+  // Turn-into submenu shows up.
+  nodeType: { type: String, default: '' },
 })
 const emit = defineEmits(['turnInto', 'duplicate', 'delete', 'close'])
 const { t } = useI18n()
 
 const rootEl = ref(null)
 const subOpen = ref(false)
+
+// Turn-into makes sense for "simple" prose-shaped blocks. For composite or
+// special-purpose blocks (widget HTML, table, columns, toggle), the
+// conversion would either no-op or drop structure — hide it.
+const TURN_INTO_OK = new Set([
+  'paragraph', 'heading', 'blockquote', 'codeBlock',
+  'bulletList', 'orderedList', 'taskList',
+  'callout',
+])
+const turnIntoApplicable = computed(() => TURN_INTO_OK.has(props.nodeType))
 
 // Match the slash menu's block list — same icons, same set. Centralizing
 // these in a shared file is overkill for two consumers; we'll lift it if a

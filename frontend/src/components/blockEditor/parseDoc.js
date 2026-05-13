@@ -35,6 +35,7 @@ function isProseShape(el) {
   const tag = el.tagName
   if (PROSE_TAGS.has(tag)) return true
   if (tag === 'DIV' && el.hasAttribute('data-phial-columns')) return true
+  if (tag === 'ASIDE' && el.classList?.contains('phial-callout')) return true
   return false
 }
 

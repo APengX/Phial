@@ -4,13 +4,14 @@
 //   - toggle:        the container (`<details>`); holds [summary, ...block+]
 //   - toggleSummary: the clickable header (`<summary>`), inline content
 //
-// In the editor we always render `<details open>` so the writer sees the
-// content while typing. The saved HTML carries the `open` attr — readers
-// who want a collapsed default can remove it from source view; PR 5 will
-// add a NodeView toggle button so authors can pick the saved state per
-// block without leaving Blocks mode.
+// `open` attribute (PR 5): captures the SAVED default — i.e. whether the
+// reader sees the body expanded on first view. The editor always shows the
+// body (ToggleView forces open=true on its rendered <details>), regardless.
+// ToggleView gives authors a chevron control to flip this attr in-place.
 
 import { Node, mergeAttributes } from '@tiptap/core'
+import { VueNodeViewRenderer } from '@tiptap/vue-3'
+import ToggleView from './ToggleView.vue'
 
 export const Toggle = Node.create({
   name: 'toggle',
@@ -18,12 +19,29 @@ export const Toggle = Node.create({
   content: 'toggleSummary block+',
   defining: true,
 
+  addAttributes() {
+    return {
+      open: {
+        default: true,
+        parseHTML: (el) => el.hasAttribute('open'),
+        // Only emit `open` when true — the saved HTML stays minimal for the
+        // common "open by default" case and switches to bare <details> when
+        // the author has explicitly chosen a closed-by-default state.
+        renderHTML: (attrs) => (attrs.open ? { open: 'open' } : {}),
+      },
+    }
+  },
+
   parseHTML() {
     return [{ tag: 'details' }]
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['details', mergeAttributes(HTMLAttributes, { open: 'open' }), 0]
+    return ['details', mergeAttributes(HTMLAttributes), 0]
+  },
+
+  addNodeView() {
+    return VueNodeViewRenderer(ToggleView)
   },
 })
 
