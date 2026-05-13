@@ -40,6 +40,13 @@
       @pick="onSlashPick"
       @hover="(i) => (slash.activeIndex = i)"
     />
+
+    <WidgetEditModal
+      :open="widgetEdit.open"
+      :initial-html="widgetEdit.html"
+      @apply="applyWidgetEdit"
+      @cancel="closeWidgetEdit"
+    />
   </div>
 </template>
 
@@ -75,6 +82,9 @@ import { useI18n } from 'vue-i18n'
 import { SlashCommands } from './blockEditor/slashCommands'
 import SlashMenuList from './blockEditor/SlashMenuList.vue'
 import BlockHandleMenu from './blockEditor/BlockHandleMenu.vue'
+import { PhialWidget } from './blockEditor/PhialWidget'
+import WidgetEditModal from './blockEditor/WidgetEditModal.vue'
+import { splitProseAndWidgets, unwrapWidgets } from './blockEditor/parseDoc'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -367,6 +377,27 @@ function onDeleteBlock() {
   })
 }
 
+// ─── widget edit modal ────────────────────────────────────────────────────
+// PhialWidget's NodeView calls onEditRequest({ html, update }) with the
+// widget's current HTML and a setter that writes the new value back to the
+// specific node. We hold both here until the user clicks Apply or Cancel.
+const widgetEdit = reactive({ open: false, html: '', update: null })
+
+function openWidgetEdit(html, update) {
+  widgetEdit.html = html
+  widgetEdit.update = update
+  widgetEdit.open = true
+}
+function applyWidgetEdit(newHtml) {
+  if (typeof widgetEdit.update === 'function') widgetEdit.update(newHtml)
+  closeWidgetEdit()
+}
+function closeWidgetEdit() {
+  widgetEdit.open = false
+  widgetEdit.html = ''
+  widgetEdit.update = null
+}
+
 // ─── editor instance ──────────────────────────────────────────────────────
 const editor = useEditor({
   extensions: [
@@ -385,11 +416,17 @@ const editor = useEditor({
         render: slashRender,
       },
     }),
+    PhialWidget.configure({
+      onEditRequest: ({ html, update }) => openWidgetEdit(html, update),
+    }),
   ],
   content: '',
   onUpdate: ({ editor }) => {
     if (suppressUpdate) return
-    const body = editor.getHTML()
+    // TipTap serializes widget nodes as `<div data-phial-widget data-html=…>`
+    // placeholders; unwrap them back to the original markup so what we save
+    // matches what the user sees in the preview / iframe.
+    const body = unwrapWidgets(editor.getHTML())
     const next = joinDoc(envelope?.prefix || '', body, envelope?.suffix || '')
     emit('update:modelValue', next)
   },
@@ -409,8 +446,13 @@ function applyExternal(html) {
   if (!editor.value) return
   const parts = splitDoc(html || '')
   envelope = (parts.prefix || parts.suffix) ? { prefix: parts.prefix, suffix: parts.suffix } : null
+  // Walk the body and collapse non-prose regions (anything carrying / nested
+  // inside a <script>, or non-schema tags like <section>/<div>/<header>) into
+  // PhialWidget placeholders. TipTap parses those into widget nodes via the
+  // node's parseHTML rule; prose-shaped HTML passes through unchanged.
+  const body = splitProseAndWidgets(parts.body) || '<p></p>'
   suppressUpdate = true
-  editor.value.commands.setContent(parts.body || '<p></p>', { emitUpdate: false })
+  editor.value.commands.setContent(body, { emitUpdate: false })
   queueMicrotask(() => { suppressUpdate = false })
 }
 
@@ -421,7 +463,10 @@ watch(
   (val) => {
     if (!editor.value) return
     const parts = splitDoc(val || '')
-    const currentBody = editor.value.getHTML()
+    // Compare against what we'd emit (envelope + unwrapped body) so the
+    // round-trip-emitted value doesn't trigger a reload. The post-unwrap
+    // body is what the parent stores; that's what `val` will be too.
+    const currentBody = unwrapWidgets(editor.value.getHTML())
     const same =
       parts.body === currentBody &&
       (envelope?.prefix || '') === (parts.prefix || '') &&

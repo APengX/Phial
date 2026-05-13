@@ -29,9 +29,6 @@
     "source": "HTML source",
     "preview": "Preview",
     "split": "Split",
-    "blocksUnsupportedTitle": "Block editing isn't ready for this document yet",
-    "blocksUnsupportedBody": "This document contains a <script> tag (an interactive widget). The block editor would strip it on save. Switch to Source — the upcoming widget block (PR 3) will let you keep editing it visually.",
-    "switchToSource": "Switch to Source",
     "save": "Save",
     "saved": "Saved",
     "unsaved": "Unsaved",
@@ -141,6 +138,16 @@
       "turnInto": "Turn into",
       "duplicate": "Duplicate",
       "delete": "Delete"
+    },
+    "widget": {
+      "badge": "Widget",
+      "edit": "Edit HTML",
+      "editTitle": "Edit widget HTML",
+      "editIntro": "Raw HTML for this widget — including any <script> / <style>. Save (Cmd+S) or Apply commits, Cancel discards.",
+      "editHint": "Cmd/Ctrl+S also applies",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "frameTitle": "Widget preview"
     }
   },
   "common": { "cancel": "Cancel", "confirm": "OK", "loading": "Loading…", "language": "Language" }

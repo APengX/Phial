@@ -29,9 +29,6 @@
     "source": "HTML 源码",
     "preview": "预览",
     "split": "分栏",
-    "blocksUnsupportedTitle": "块编辑暂不支持这篇文档",
-    "blocksUnsupportedBody": "这篇文档里有 <script>（交互式 widget）。直接在块视图里改会把它丢掉。先切到「源码」编辑；之后的「Widget 块」(PR 3) 落地后就能在块视图里整段编辑这种内容了。",
-    "switchToSource": "切到源码",
     "save": "保存",
     "saved": "已保存",
     "unsaved": "未保存",
@@ -141,6 +138,16 @@
       "turnInto": "转换为",
       "duplicate": "复制",
       "delete": "删除"
+    },
+    "widget": {
+      "badge": "Widget",
+      "edit": "编辑 HTML",
+      "editTitle": "编辑 Widget HTML",
+      "editIntro": "这是这个 widget 的原始 HTML —— 包括 <script> / <style>。保存（Cmd+S）或点「应用」提交，「取消」放弃改动。",
+      "editHint": "Cmd/Ctrl+S 也能直接应用",
+      "apply": "应用",
+      "cancel": "取消",
+      "frameTitle": "Widget 预览"
     }
   },
   "common": { "cancel": "取消", "confirm": "确定", "loading": "加载中…", "language": "语言" }
