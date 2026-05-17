@@ -40,6 +40,19 @@
       <button class="primary" :disabled="!newName.trim() || creating" @click="create">
         {{ t('home.newDoc') }}
       </button>
+      <button
+        class="ghost upload-btn"
+        :disabled="creating"
+        :title="t('home.uploadHint')"
+        @click="triggerUpload"
+      >📤 {{ t('home.upload') }}</button>
+      <input
+        ref="uploadInput"
+        type="file"
+        accept=".pdf,.md,.markdown,.mdx,.txt,.log,.csv,.tsv,.html,.htm,image/*"
+        class="hidden-input"
+        @change="onFilePicked"
+      />
     </section>
 
     <section class="examples">
@@ -107,7 +120,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getWorkspace, setWorkspace } from '@/api/workspace'
-import { listDocuments, createDocument, getDocument, deleteDocument, renameDocument } from '@/api/documents'
+import { listDocuments, createDocument, getDocument, deleteDocument, renameDocument, uploadDocument } from '@/api/documents'
 import {
   listAllContextFolders,
   listContextFolders,
@@ -259,6 +272,29 @@ async function create() {
   }
 }
 
+const uploadInput = ref(null)
+function triggerUpload() {
+  if (creating.value) return
+  uploadInput.value?.click()
+}
+
+async function onFilePicked(e) {
+  const file = e.target.files && e.target.files[0]
+  // Reset so picking the same file twice still fires `change`.
+  e.target.value = ''
+  if (!file || creating.value) return
+  creating.value = true
+  try {
+    const doc = await uploadDocument(file)
+    pushToast(t('home.uploadDone', { name: doc.title || doc.name }), 'success')
+    open(doc.path)
+  } catch (err) {
+    pushToast(err.message, 'error')
+  } finally {
+    creating.value = false
+  }
+}
+
 async function useExample(ex) {
   if (creating.value) return
   creating.value = true
@@ -348,7 +384,9 @@ h1 { margin: 0; font-size: 24px; }
 .agent-status.warn { color: #b45309; }
 .agent-status:hover { background: var(--bg-soft); }
 
-.new-doc { margin-top: 16px; display: flex; gap: 8px; }
+.new-doc { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+.hidden-input { display: none; }
+.upload-btn { white-space: nowrap; }
 
 .examples { margin-top: 32px; }
 .examples h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }

@@ -5,6 +5,9 @@
     "changeWorkspace": "Change folder",
     "newDoc": "New document",
     "newDocName": "Document name (.html optional)",
+    "upload": "Upload file",
+    "uploadHint": "Turn a PDF / Markdown / text / HTML / image file into an HTML document",
+    "uploadDone": "Created document \"{name}\"",
     "noDocs": "No documents in this workspace yet. Create one, start from an example below, or generate with AI in the editor.",
     "recent": "All documents",
     "examples": "Examples · ready-to-use interactive docs",
@@ -84,7 +87,7 @@
   },
   "ctx": {
     "title": "Conversation context · {path}",
-    "intro": "Nothing is sent by default. Tick the files you want the AI to see and they'll be spliced into the next prompt.",
+    "intro": "Nothing is sent by default. Tick the files you want the AI to see and they'll be spliced into the next prompt. PDFs are sent natively as attachments (with text-extraction fallback when the provider doesn't support it).",
     "folders": "Bound folders",
     "foldersEmpty": "No folders attached to this document yet. Attach one from the home page.",
     "workspaceDocs": "Other workspace documents",

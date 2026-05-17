@@ -5,6 +5,9 @@
     "changeWorkspace": "切换文件夹",
     "newDoc": "新建文档",
     "newDocName": "文档名（可不带 .html）",
+    "upload": "上传文件",
+    "uploadHint": "把 PDF / Markdown / 文本 / HTML / 图片 转为一个 HTML 文档",
+    "uploadDone": "已创建文档「{name}」",
     "noDocs": "这个工作区还没有文档。新建一个、从下面的示例创建，或在编辑器里用 AI 生成。",
     "recent": "全部文档",
     "examples": "示例 · 拿来即用的交互文档",
@@ -84,7 +87,7 @@
   },
   "ctx": {
     "title": "对话上下文 · {path}",
-    "intro": "默认一个文件都不发。勾上要让 AI 看的文件，下次发消息时会塞进 prompt。",
+    "intro": "默认一个文件都不发。勾上要让 AI 看的文件，下次发消息时会塞进 prompt。PDF 会作为附件原生发给模型（provider 不支持时回退为抽文字）。",
     "folders": "绑定的文件夹",
     "foldersEmpty": "这篇文档还没绑定文件夹。去首页给它挂一个。",
     "workspaceDocs": "工作区其它文档",

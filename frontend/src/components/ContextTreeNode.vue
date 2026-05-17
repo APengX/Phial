@@ -24,8 +24,9 @@
       />
 
       <!-- name + (file size) -->
-      <span class="icon" aria-hidden="true">{{ node.type === 'dir' ? '📁' : '📄' }}</span>
+      <span class="icon" aria-hidden="true">{{ fileIcon }}</span>
       <span class="name" @click="onLabelClick">{{ node.name }}</span>
+      <span v-if="node.type === 'file' && node.kind === 'attach'" class="kind-tag" title="作为附件原生发送给模型">PDF</span>
       <span v-if="node.type === 'file'" class="size muted">{{ fmtBytes(node.size) }}</span>
       <span v-else-if="node.allFiles.length" class="count muted">
         {{ pickedUnder }}/{{ node.allFiles.length }}
@@ -71,6 +72,11 @@ const emit = defineEmits(['toggle-file', 'toggle-dir', 'toggle-open'])
 // Reading `.size` on the Sets is what makes Vue track them — picks/openSet are
 // reactive proxies, and any change to add/delete reruns these computeds.
 const open = computed(() => props.openSet.has(props.node.path))
+
+const fileIcon = computed(() => {
+  if (props.node.type === 'dir') return '📁'
+  return props.node.kind === 'attach' ? '📕' : '📄'
+})
 
 const pickedUnder = computed(() => {
   if (props.node.type !== 'dir') return 0
@@ -151,4 +157,8 @@ input[type="checkbox"] { flex: none; margin: 0; cursor: pointer; }
   cursor: pointer; user-select: none;
 }
 .size, .count { font-size: 11px; white-space: nowrap; flex: none; }
+.kind-tag {
+  font-size: 10px; padding: 0 5px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; letter-spacing: 0.03em; flex: none;
+}
 </style>

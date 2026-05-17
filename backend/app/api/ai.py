@@ -18,15 +18,20 @@ back to treating the reply as a whole document if no blocks are found.
 """
 
 import json
+import re
+from pathlib import PurePosixPath
 
 from flask import Response, request, stream_with_context
 
 from . import ai_bp
 from ..config import Config
 from ..services import app_settings
+from ..services import attachments as attachments_mod
 from ..services import cli_agent
 from ..services import context_folder
+from ..services import media
 from ..services.agents import BUILTIN_ID
+from ..services.attachments import AttachmentsUnsupported
 from ..services.cli_agent import CliAgentError
 from ..services.html_agent import (
     build_chat_messages,
@@ -36,14 +41,46 @@ from ..services.html_agent import (
     finalize_html,
 )
 from ..services.llm_client import LLMClient, LLMNotConfigured
+from ..services.workspace import Workspace, WorkspaceError
 from ..utils.logger import get_logger
 from ..utils.responses import fail, ok
+
+_PDF_SRC_RE = re.compile(
+    r'<meta[^>]+name="phial-pdf-src"[^>]+content="([^"]*)"',
+    re.IGNORECASE,
+)
 
 logger = get_logger("phial.api.ai")
 
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _pdf_text_block(picks) -> str:
+    """Concatenate extracted PDF text for the fallback path. `picks` is the
+    list of (path, label) from context_folder.attachments_for()."""
+    chunks = []
+    for fp, label in picks:
+        try:
+            raw = fp.read_bytes()
+        except OSError as exc:
+            logger.warning("PDF read failed (%s): %s", label, exc)
+            continue
+        text = media.extract_pdf_text(raw)
+        if text:
+            chunks.append(f"### {label} (PDF)\n{text}")
+    if not chunks:
+        return ""
+    return "## PDF 附件（provider 不支持原生文件 → 已抽取为文字）\n\n" + "\n\n".join(chunks)
+
+
+def _merge_bundle(bundle: str, extra: str) -> str:
+    if not extra:
+        return bundle
+    if not bundle:
+        return extra
+    return bundle + "\n\n" + extra
 
 
 @ai_bp.route("/chat", methods=["POST"])
@@ -78,6 +115,36 @@ def chat():
         logger.exception("context bundle build failed (non-fatal)")
         context_bundle = ""
 
+    # PDF picks are routed to the provider's Files API when available;
+    # otherwise we extract text and splice it into the bundle so the chat
+    # still sees the document's contents.
+    pdf_picks = []
+    try:
+        pdf_picks = context_folder.attachments_for(path) if path else []
+    except Exception:  # noqa: BLE001
+        logger.exception("attachments resolve failed (non-fatal)")
+    attachments_blocks = []
+
+    # If the current document is a PDF placeholder (uploaded via native path),
+    # resolve its source file and prepend it to pdf_picks so it gets sent via
+    # the inline file block, not text-extracted. Clear current_html so the
+    # agent uses the CREATE template (the placeholder body isn't useful).
+    doc_pdf_path = None
+    m = _PDF_SRC_RE.search(current_html) if current_html else None
+    if m:
+        pdf_rel = m.group(1)
+        logger.info("PDF placeholder detected: phial-pdf-src=%s", pdf_rel)
+        try:
+            doc_pdf_path = Workspace.resolve(pdf_rel, must_exist=True)
+            pdf_picks = [(doc_pdf_path, PurePosixPath(pdf_rel).stem)] + pdf_picks
+            current_html = ""
+            logger.info("PDF resolved: %s", doc_pdf_path)
+        except WorkspaceError as exc:
+            logger.warning("PDF source file missing (%s): %s — sending placeholder as text", pdf_rel, exc)
+    else:
+        if current_html:
+            logger.debug("no phial-pdf-src in current_html (len=%d)", len(current_html))
+
     # Build a generator factory + a one-shot factory for the chosen provider.
     # Agent mode -> produce HTML edits; chat mode -> free-form text reply.
     if provider == BUILTIN_ID:
@@ -85,15 +152,31 @@ def chat():
             client = LLMClient()
         except LLMNotConfigured as exc:
             return fail(str(exc), 503)
+        if pdf_picks:
+            if attachments_mod.supports_file_blocks(client._client, client.model):
+                logger.info("provider supports file blocks — building inline blocks for %d PDF(s)", len(pdf_picks))
+                try:
+                    attachments_blocks = attachments_mod.upload_pdfs(
+                        client._client, pdf_picks, model=client.model
+                    )
+                    logger.info("PDF blocks built: %s", [b.get("type") for b in attachments_blocks])
+                except AttachmentsUnsupported as exc:
+                    logger.info("PDF files unreadable, falling back to text extraction: %s", exc)
+                    context_bundle = _merge_bundle(context_bundle, _pdf_text_block(pdf_picks))
+            else:
+                logger.info("provider may strip file blocks (base_url=%s) — using text extraction", client.base_url)
+                context_bundle = _merge_bundle(context_bundle, _pdf_text_block(pdf_picks))
         if mode == "chat":
             messages = build_chat_messages(
                 prompt, current_html, history, path, interface_state, picked_element,
                 context_bundle=context_bundle,
+                attachments=attachments_blocks,
             )
         else:
             messages = build_messages(
                 prompt, current_html, interface_state, picked_element,
                 context_bundle=context_bundle,
+                attachments=attachments_blocks,
             )
         max_tokens = Config.LLM_MAX_TOKENS
 
@@ -108,6 +191,9 @@ def chat():
             cli_agent.ensure_available(provider)
         except CliAgentError as exc:
             return fail(str(exc), 503)
+        # CLI agents always go text-only — extract PDF text into the bundle.
+        if pdf_picks:
+            context_bundle = _merge_bundle(context_bundle, _pdf_text_block(pdf_picks))
         if mode == "chat":
             text_prompt = build_chat_prompt(
                 prompt, current_html, history, path, interface_state, picked_element,

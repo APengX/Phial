@@ -200,7 +200,8 @@ function buildTree(flatFiles) {
       type: 'file',
       name: parts[parts.length - 1],
       rel: f.rel,
-      size: f.size
+      size: f.size,
+      kind: f.kind || 'text'
     })
   }
   // Sort: dirs first, then files; both alphabetical. Also fill allFiles.

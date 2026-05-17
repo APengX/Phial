@@ -215,9 +215,30 @@ class Workspace:
         return cls.read_doc(dst_p.relative_to(cls.root()).as_posix())
 
     @classmethod
+    def write_file(cls, rel_path: str, data: bytes) -> Path:
+        """Write raw bytes to a workspace path (e.g. an uploaded PDF original)."""
+        target = cls.resolve(rel_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        return target
+
+    @classmethod
     def mkdir(cls, rel_path: str) -> None:
         target = cls.resolve(rel_path)
         target.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def unique_doc_path(cls, stem: str) -> str:
+        """Return a workspace-relative `.html` path that doesn't yet exist.
+        Sanitizes `stem` and appends ` (n)` if needed."""
+        safe = _sanitize_stem(stem) or "untitled"
+        root = cls.root()
+        candidate = root / f"{safe}.html"
+        n = 2
+        while candidate.exists():
+            candidate = root / f"{safe} ({n}).html"
+            n += 1
+        return candidate.relative_to(root).as_posix()
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -256,3 +277,14 @@ def _escape(text: str) -> str:
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
+
+
+# Match anything the filesystem (or our path resolver) would choke on.
+_BAD_STEM_CHARS = re.compile(r'[\\/:*?"<>|]+')
+
+
+def _sanitize_stem(stem: str) -> str:
+    s = _BAD_STEM_CHARS.sub("_", (stem or "").strip())
+    # collapse whitespace runs but keep single spaces (legal in filenames)
+    s = re.sub(r"\s+", " ", s).strip(". ")
+    return s[:120]

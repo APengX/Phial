@@ -146,6 +146,7 @@ def build_chat_messages(
     interface_state: Any = None,  # noqa: ARG001 — intentionally ignored in chat
     picked_element: Any = None,
     context_bundle: Optional[str] = None,
+    attachments: Optional[List[dict]] = None,
 ) -> List[dict]:
     """Build messages for chat-mode replies: free-form text, no HTML edits.
 
@@ -182,7 +183,18 @@ def build_chat_messages(
         messages.append({"role": role, "content": text})
 
     if prompt and prompt.strip():
-        messages.append({"role": "user", "content": prompt.strip()})
+        user_text = prompt.strip()
+        if attachments:
+            messages.append({
+                "role": "user",
+                "content": [*attachments, {"type": "text", "text": user_text}],
+            })
+        else:
+            messages.append({"role": "user", "content": user_text})
+    elif attachments:
+        # Attachments alone (no typed prompt) — uncommon in chat mode since
+        # the panel forces a prompt, but keep the door open.
+        messages.append({"role": "user", "content": list(attachments)})
 
     return messages
 
@@ -233,6 +245,7 @@ def build_messages(
     interface_state: Any = None,
     picked_element: Any = None,
     context_bundle: Optional[str] = None,
+    attachments: Optional[List[dict]] = None,
 ) -> List[dict]:
     prompt = (prompt or "").strip()
     parts: List[str] = []
@@ -256,7 +269,13 @@ def build_messages(
             "role": "system",
             "content": _CONTEXT_SYSTEM_BLOCK.format(bundle=context_bundle.strip()),
         })
-    messages.append({"role": "user", "content": user})
+    if attachments:
+        messages.append({
+            "role": "user",
+            "content": [*attachments, {"type": "text", "text": user}],
+        })
+    else:
+        messages.append({"role": "user", "content": user})
     return messages
 
 

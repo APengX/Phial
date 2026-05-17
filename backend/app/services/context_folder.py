@@ -30,7 +30,7 @@ and normalized to the new shape; the next write upgrades it on disk.
 """
 
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
 from ..utils.logger import get_logger
 from . import app_settings
@@ -65,6 +65,10 @@ TEXT_EXTENSIONS = {
     ".lua", ".r", ".clj", ".ex", ".exs", ".erl", ".elm", ".dart",
     ".gradle", ".xml", ".tex",
 }
+
+# Binary attachments that go to the model via the provider's Files API
+# (native PDF support) instead of being spliced into the prompt text.
+ATTACH_EXTENSIONS = {".pdf"}
 
 # Files without an extension that are almost always worth showing.
 NO_EXT_NAMES = {
@@ -331,7 +335,7 @@ def list_pickable(doc_rel: str, folder: str) -> List[dict]:
             rel_name = fp.relative_to(root).as_posix()
         except ValueError:
             continue
-        out.append({"rel": rel_name, "size": _safe_size(fp)})
+        out.append({"rel": rel_name, "size": _safe_size(fp), "kind": _kind_of(fp)})
     out.sort(key=lambda d: d["rel"].lower())
     return out
 
@@ -408,6 +412,11 @@ def bundle_for(doc_rel: str, *, max_chars: int = MAX_TOTAL_CHARS) -> str:
             if not fp.exists() or not fp.is_file():
                 pieces.append(f"\n### {rel_name}\n（已不存在）\n")
                 continue
+            if _is_attachable(fp):
+                # PDFs go to the provider via attachments_for() — list them
+                # by name so the prompt acknowledges they're attached.
+                pieces.append(f"\n### {rel_name}\n（已作为附件随消息发送）\n")
+                continue
             remaining = _emit_file(pieces, fp, rel_name, remaining, overflow)
 
     # --- cross-doc picks (workspace .html) ------------------------------
@@ -434,6 +443,40 @@ def bundle_for(doc_rel: str, *, max_chars: int = MAX_TOTAL_CHARS) -> str:
         pieces.append(tail)
 
     return "".join(pieces).strip()
+
+
+def attachments_for(doc_rel: str) -> List[Tuple[Path, str]]:
+    """Resolve picked-but-binary files (currently just PDFs) into a list of
+    `(absolute_path, label)` pairs. Used by the AI layer to ship them through
+    the provider's Files API instead of stuffing them into the prompt text.
+    Missing / out-of-folder picks are dropped silently — they already get a
+    "（已不存在）" note in the text bundle.
+    """
+    try:
+        rel = _normalize_doc(doc_rel)
+    except ContextFolderError:
+        return []
+    entry = _entry(rel)
+    out: List[Tuple[Path, str]] = []
+    for folder in entry["folders"]:
+        picks = folder.get("picks") or []
+        if not picks:
+            continue
+        root = Path(folder["path"])
+        if not root.exists() or not root.is_dir():
+            continue
+        root_resolved = root.resolve()
+        for rel_name in sorted(picks):
+            fp = (root / rel_name).resolve()
+            try:
+                fp.relative_to(root_resolved)
+            except ValueError:
+                continue
+            if not fp.exists() or not fp.is_file():
+                continue
+            if _is_attachable(fp):
+                out.append((fp, rel_name))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -467,15 +510,26 @@ def _safe_size(p: Path) -> int:
 
 
 def _iter_text_files(root: Path) -> Iterable[Path]:
-    """Yield text-looking files under `root` (after the SKIP_DIRS prune)."""
+    """Yield pickable files under `root` (text + attachables, post SKIP_DIRS prune).
+
+    Name is kept for callers; the contents includes both text-extracted and
+    attach-native (PDF) candidates. Per-kind size caps are applied separately
+    because PDFs are routinely larger than the text cap.
+    """
     count = 0
     for path in _walk(root):
         if count >= MAX_FILES_LISTED:
             return
-        if not _looks_textual(path):
+        if not _is_pickable(path):
             continue
-        if _safe_size(path) > MAX_FILE_BYTES:
-            continue
+        size = _safe_size(path)
+        if _is_attachable(path):
+            # Provider Files API has its own size cap; we just skip empties.
+            if size <= 0:
+                continue
+        else:
+            if size > MAX_FILE_BYTES:
+                continue
         count += 1
         yield path
 
@@ -485,6 +539,18 @@ def _looks_textual(p: Path) -> bool:
     if suffix:
         return suffix in TEXT_EXTENSIONS
     return p.name in NO_EXT_NAMES
+
+
+def _is_attachable(p: Path) -> bool:
+    return p.suffix.lower() in ATTACH_EXTENSIONS
+
+
+def _is_pickable(p: Path) -> bool:
+    return _looks_textual(p) or _is_attachable(p)
+
+
+def _kind_of(p: Path) -> str:
+    return "attach" if _is_attachable(p) else "text"
 
 
 def _walk(root: Path) -> Iterable[Path]:
