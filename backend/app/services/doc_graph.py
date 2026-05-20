@@ -1,7 +1,10 @@
 """Build a document relationship graph for the active workspace.
 
 Nodes are .html documents. Edges come from two sources:
-  - "link"    : an <a href> in one document that resolves to another doc
+  - "link"    : a link from one document to another. Taken from the Markdown
+                text layer (`.phial/text/`) when a document has been extracted
+                there, so manual edits to the wiki layer are reflected;
+                otherwise fall back to scanning the document's <a href> tags.
   - "context" : a cross-document context pick (set in the context picker)
 
 Nothing is persisted — the graph is derived on every request.
@@ -63,6 +66,39 @@ def _hrefs(html: str):
         return re.findall(r'href=["\']([^"\']+)["\']', html)
 
 
+# --- Markdown text layer -----------------------------------------------------
+
+# Inline Markdown link: [label](target) — we only need the target.
+_MD_LINK_RE = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+)")
+
+
+def _md_link_targets(md_text: str, md_dir: str, doc_set: set):
+    """Resolve the internal Markdown links of a text-layer page to doc paths.
+
+    Links in `.phial/text/` point between `.md` files; map each one back to the
+    matching workspace document (`.html`/`.htm`)."""
+    out = []
+    for m in _MD_LINK_RE.finditer(md_text):
+        href = m.group(1).strip()
+        if not href or href.startswith(("#", "http://", "https://", "mailto:", "tel:")):
+            continue
+        href = unquote(href.split("#")[0]).strip().replace("\\", "/")
+        if not href.lower().endswith(".md"):
+            continue
+        if href.startswith("/"):
+            rel = posixpath.normpath(href.lstrip("/"))
+        else:
+            rel = posixpath.normpath(posixpath.join(md_dir, href) if md_dir else href)
+        if rel in (".", "") or rel.startswith(".."):
+            continue
+        stem = rel[:-3]  # drop ".md"
+        for doc in (stem + ".html", stem + ".htm"):
+            if doc in doc_set:
+                out.append(doc)
+                break
+    return out
+
+
 def build() -> dict:
     """Return {root, nodes, edges} for the active workspace."""
     root = Workspace.root()
@@ -93,9 +129,26 @@ def build() -> dict:
         seen.add(key)
         edges.append({"source": src, "target": dst, "kind": kind})
 
-    # --- link edges: <a href> pointing at another workspace doc ------------
+    # --- link edges --------------------------------------------------------
+    # Prefer the Markdown text layer (it reflects manual wiki edits); fall back
+    # to scanning the document's own <a href> tags when it has no .md sidecar.
+    from .doc_text import TEXT_DIR, _md_rel  # lazy: avoids an import cycle
+
+    text_base = root / TEXT_DIR
     for d in docs:
         rel = d["path"]
+        md_rel = _md_rel(rel)
+        md_file = text_base / md_rel
+        if md_file.is_file():
+            try:
+                md_text = md_file.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                md_text = None
+            if md_text is not None:
+                for tgt in _md_link_targets(md_text, posixpath.dirname(md_rel), doc_set):
+                    add_edge(rel, tgt, "link")
+                continue
+        # fallback: scan the HTML directly
         if d.get("size", 0) > _MAX_SCAN_BYTES:
             continue
         try:

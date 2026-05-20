@@ -21,7 +21,7 @@ from typing import List
 
 from bs4 import BeautifulSoup, NavigableString
 
-from . import doc_summary
+from . import doc_summary, doc_text
 from .workspace import Workspace
 from ..utils.logger import get_logger
 
@@ -36,6 +36,9 @@ _GENERIC_TITLES = {"无标题", "新文档", "untitled", "document", "新建文�
 
 # Cap how much text the AI pass sees, and how many targets it's offered.
 _MAX_TARGETS = 240
+
+# Cap the Markdown returned for the scan-all preview, per document.
+_MAX_DISPLAY_CHARS = 20_000
 
 _ASCII_RE = re.compile(r"[\x00-\x7f]+")
 
@@ -101,27 +104,24 @@ def collect_targets(current_path: str) -> List[dict]:
 
 # --- pass 1: exact title match -----------------------------------------------
 
-def exact_candidates(html: str, targets: List[dict]) -> List[dict]:
-    """Find verbatim occurrences of a target's title in the document body.
-
-    One candidate per target — the first place its title appears in linkable
-    text. Longer titles win when two titles overlap at the same spot."""
+def _html_text(html: str) -> str:
+    """Concatenate a document's linkable text (skips <a>, code, head, ...)."""
     try:
         soup = BeautifulSoup(html or "", "html.parser")
     except Exception:  # noqa: BLE001
-        return []
+        return ""
     body = soup.body or soup
+    chunks = [str(n) for n in body.find_all(string=True) if not _in_skip(n)]
+    return " ".join(chunks)
 
-    # Concatenate linkable text once; this is only used to locate matches.
-    chunks: List[str] = []
-    for node in body.find_all(string=True):
-        if _in_skip(node):
-            continue
-        chunks.append(str(node))
-    text = " ".join(chunks)
-    if not text.strip():
+
+def _match_targets(text: str, targets: List[dict]) -> List[dict]:
+    """Find verbatim title occurrences in `text` — one candidate per target.
+
+    The first place a title appears wins; longer titles win when two overlap
+    at the same spot."""
+    if not text or not text.strip():
         return []
-
     found: List[dict] = []
     for tgt in sorted(targets, key=lambda t: len(t["title"]), reverse=True):
         title = tgt["title"]
@@ -138,33 +138,70 @@ def exact_candidates(html: str, targets: List[dict]) -> List[dict]:
     return found
 
 
-def scan_workspace() -> List[dict]:
-    """Exact-match auto-link across the whole workspace.
+def exact_candidates(html: str, targets: List[dict]) -> List[dict]:
+    """Find verbatim occurrences of a target's title in a document's HTML body.
 
-    Returns one group per source document that has candidates:
-      [{path, title, candidates:[{id,phrase,target,title,kind,snippet}]}]
-    Exact-only — fast, deterministic, no model calls — so a "link everything"
-    sweep stays instant. The AI pass is the per-document feature."""
+    Used by the per-document scan, which works on the live (possibly unsaved)
+    editor HTML."""
+    return _match_targets(_html_text(html), targets)
+
+
+def _doc_text_layer(path: str) -> tuple:
+    """Return (display_markdown, match_text) for a stored document.
+
+    Prefers the Markdown text layer (`.phial/text/`): `match_text` is the
+    cleaned prose used for matching (markup and already-linked mentions
+    stripped); `display_markdown` is the Markdown shown in the scan-all
+    preview — frontmatter dropped, length-capped. Falls back to the raw HTML
+    text for any document not yet extracted (no Markdown to preview)."""
+    md_file = doc_text.text_path(path)
+    if md_file.is_file():
+        try:
+            raw = md_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            raw = None
+        if raw is not None:
+            display = doc_text.without_frontmatter(raw).strip()
+            if len(display) > _MAX_DISPLAY_CHARS:
+                display = display[:_MAX_DISPLAY_CHARS] + "\n\n…"
+            return display, doc_text.markdown_plain_text(raw)
+    try:
+        return "", _html_text(Workspace.read_doc(path)["html"])
+    except Exception:  # noqa: BLE001
+        return "", ""
+
+
+def scan_workspace() -> List[dict]:
+    """Exact-match auto-link across the whole workspace, via the text layer.
+
+    Matching runs on each document's Markdown text layer (the API refreshes it
+    first), so markup and already-linked mentions don't produce noise; the
+    discovered phrases are still applied as <a href> back into the HTML.
+
+    Returns one group per workspace document, so the caller can show the whole
+    extracted Markdown layer:
+      [{path, title, markdown, candidates:[{id,phrase,target,title,kind,
+      snippet}]}]
+    `markdown` is the extracted text layer (for the preview); `candidates` is
+    empty when the document mentions no other document by title. Exact-only —
+    fast, deterministic, no model calls. The AI pass stays the per-document
+    feature."""
     docs = Workspace.list_docs()
     targets = _all_targets()
     groups: List[dict] = []
     for d in docs:
         path = d["path"]
         doc_targets = [t for t in targets if t["path"] != path][:_MAX_TARGETS]
-        if not doc_targets:
-            continue
-        try:
-            html = Workspace.read_doc(path)["html"]
-        except Exception:  # noqa: BLE001
-            continue
-        cands = exact_candidates(html, doc_targets)
-        if not cands:
-            continue
+        markdown, match_text = _doc_text_layer(path)
+        cands = _match_targets(match_text, doc_targets) if doc_targets else []
         for i, c in enumerate(cands):
             c["id"] = i
+        if not markdown and not cands:
+            continue
         groups.append({
             "path": path,
             "title": d.get("title") or path,
+            "markdown": markdown,
             "candidates": cands,
         })
     return groups

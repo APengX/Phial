@@ -52,7 +52,9 @@
     "external": "允许外部资源(CDN)",
     "openInBrowser": "用浏览器打开",
     "dragWidth": "拖动调整面板宽度",
-    "stateBadge": "界面状态"
+    "stateBadge": "界面状态",
+    "hideTopbar": "收起顶栏",
+    "showTopbar": "展开顶栏"
   },
   "ai": {
     "title": "AI 助手",
@@ -221,11 +223,7 @@
     "selected": "已选 {n} / {total}",
     "apply": "添加链接",
     "applying": "添加中…",
-    "applied": "已添加 {n} 个链接",
-    "scanAllBtn": "一键连接",
-    "scanAllTip": "扫描整个工作区并自动连接相关文档",
-    "scanAllIntro": "扫描整个工作区，把每篇文档里提到的词连到对应的文档（精确匹配标题）。",
-    "appliedAll": "已为 {docs} 篇文档添加 {n} 个链接"
+    "applied": "已添加 {n} 个链接"
   },
   "common": { "cancel": "取消", "confirm": "确定", "loading": "加载中…", "language": "语言" }
 }

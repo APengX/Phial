@@ -52,7 +52,9 @@
     "external": "Allow external resources (CDN)",
     "openInBrowser": "Open in browser",
     "dragWidth": "Drag to resize the panel",
-    "stateBadge": "interface state"
+    "stateBadge": "interface state",
+    "hideTopbar": "Collapse the top bar",
+    "showTopbar": "Show the top bar"
   },
   "ai": {
     "title": "AI assistant",
@@ -221,11 +223,7 @@
     "selected": "{n} / {total} selected",
     "apply": "Add links",
     "applying": "Adding…",
-    "applied": "Added {n} link(s)",
-    "scanAllBtn": "Link all",
-    "scanAllTip": "Scan the whole workspace and auto-link related documents",
-    "scanAllIntro": "Scan the whole workspace and link mentioned terms to their documents (exact title match).",
-    "appliedAll": "Added {n} link(s) across {docs} document(s)"
+    "applied": "Added {n} link(s)"
   },
   "common": { "cancel": "Cancel", "confirm": "OK", "loading": "Loading…", "language": "Language" }
 }

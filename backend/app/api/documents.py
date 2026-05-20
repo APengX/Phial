@@ -15,7 +15,7 @@ import io
 from flask import Response, request
 
 from . import documents_bp
-from ..services import app_settings, auto_link, cli_agent, doc_graph
+from ..services import app_settings, auto_link, cli_agent, doc_graph, doc_text
 from ..services.agents import BUILTIN_ID
 from ..services.cli_agent import CliAgentError
 from ..services.llm_client import LLMClient, LLMNotConfigured
@@ -62,6 +62,19 @@ def graph():
         return ok(doc_graph.build())
     except WorkspaceError as exc:
         return fail(str(exc))
+
+
+@documents_bp.route("/extract-text", methods=["POST"])
+def extract_text():
+    """Extract documents into the Markdown text layer under `.phial/text/`.
+
+    Body: optional {path} to extract a single document; absent extracts the
+    whole workspace. Returns {count, files, dir}."""
+    path = (_body().get("path") or "").strip()
+    try:
+        return ok(doc_text.extract_one(path) if path else doc_text.extract_all())
+    except WorkspaceError as exc:
+        return fail(str(exc), 404 if "不存在" in str(exc) else 400)
 
 
 def _auto_link_ai(html: str, targets: list) -> list:
@@ -145,9 +158,14 @@ def auto_link_apply():
 def auto_link_scan_all():
     """Workspace-wide auto-link: exact-title matches across every document.
 
-    Returns {groups:[{path,title,candidates:[...]}]}. Exact-only — instant, no
-    model calls."""
+    Refreshes the Markdown text layer first, then matches against it (links are
+    still applied as <a href> in the HTML). Returns {groups:[{path,title,
+    candidates:[...]}]}. Exact-only — no model calls."""
     try:
+        try:
+            doc_text.extract_all()
+        except Exception:  # noqa: BLE001
+            logger.exception("auto-link scan-all: text extraction failed (non-fatal)")
         groups = auto_link.scan_workspace()
     except WorkspaceError as exc:
         return fail(str(exc))

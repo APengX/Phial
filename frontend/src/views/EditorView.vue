@@ -1,7 +1,7 @@
 <template>
   <div class="editor-shell">
     <!-- top bar -->
-    <header class="topbar">
+    <header v-show="showTopbar" class="topbar">
       <button class="ghost" @click="goHome">‹ {{ t('editor.back') }}</button>
       <button class="ghost icon-btn" @click="showTree = !showTree" :title="'Sidebar'">☰</button>
 
@@ -55,8 +55,17 @@
           {{ editMode ? '✓ ' + t('editor.editing') : '✎ ' + t('editor.edit') }}
         </button>
         <button class="ghost icon-btn" @click="showAi = !showAi" title="AI">✦</button>
+        <button class="ghost icon-btn" @click="showTopbar = false" :title="t('editor.hideTopbar')">⌃</button>
       </div>
     </header>
+
+    <!-- restore the collapsed top bar -->
+    <button
+      v-show="!showTopbar"
+      class="topbar-restore"
+      @click="showTopbar = true"
+      :title="t('editor.showTopbar')"
+    >⌄</button>
 
     <SettingsModal v-model="settingsOpen" @saved="onAgentSaved" />
     <ContextPicker v-model="ctxOpen" :path="currentPath" @changed="onCtxChanged" />
@@ -213,6 +222,7 @@ const saving = ref(false)
 const viewMode = ref('split')
 const showTree = ref(true)
 const showAi = ref(true)
+const showTopbar = ref(true)
 const interfaceState = ref(null) // last state the rendered doc reported via window.phial
 const pickedElement = ref(null)  // element captured from the preview via "选元素"
 const pickMode = ref(false)
@@ -595,13 +605,24 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.editor-shell { display: flex; flex-direction: column; height: 100%; }
+.editor-shell { display: flex; flex-direction: column; height: 100%; position: relative; }
 
 .topbar {
   display: flex; align-items: center; gap: 10px; padding: 7px 12px;
   border-bottom: 1px solid var(--border); background: var(--bg-panel); flex-wrap: nowrap;
 }
 .icon-btn { padding: 5px 9px; }
+
+/* small tab that brings the collapsed top bar back */
+.topbar-restore {
+  position: absolute; top: 0; right: 12px; z-index: 7;
+  padding: 1px 12px; line-height: 1.3; font-size: 13px;
+  border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--bg-panel); color: var(--text-dim);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.topbar-restore:hover { color: var(--accent); }
 .icon-btn.agent-warn { color: #8a6122; border-color: var(--warning); background: rgba(199, 142, 63, 0.12); }
 .doc-id { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
 .doc-id code { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

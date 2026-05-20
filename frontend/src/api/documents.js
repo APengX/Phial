@@ -14,10 +14,6 @@ export const autoLinkScan = (path, html) =>
   http.post('/documents/auto-link/scan', { path, html })
 export const autoLinkApply = (path, html, picks) =>
   http.post('/documents/auto-link/apply', { path, html, picks })
-// Workspace-wide: scan / apply across every document.
-export const autoLinkScanAll = () => http.post('/documents/auto-link/scan-all', {})
-export const autoLinkApplyAll = (groups) =>
-  http.post('/documents/auto-link/apply-all', { groups })
 
 export function uploadDocument(file, { dir } = {}) {
   const fd = new FormData()
