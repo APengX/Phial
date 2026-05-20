@@ -16,6 +16,11 @@
         @click="newChat"
       ><span class="ico" aria-hidden="true">＋</span>{{ t('ai.newChat') }}</button>
       <span class="muted hint" :title="hintLong">{{ hintShort }}</span>
+      <button
+        class="ghost ai-collapse"
+        :title="t('ai.collapse')"
+        @click="$emit('collapse')"
+      >›</button>
     </div>
 
     <div ref="logEl" class="ai-log scroll">
@@ -132,7 +137,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   disabledReason: { type: String, default: '' }
 })
-const emit = defineEmits(['apply', 'clear-state', 'toggle-pick', 'clear-picked', 'open-context'])
+const emit = defineEmits(['apply', 'clear-state', 'toggle-pick', 'clear-picked', 'open-context', 'collapse'])
 const { t } = useI18n()
 
 // Messages keep `mode` on each entry so a doc's transcript can mix agent + chat
@@ -421,6 +426,7 @@ defineExpose({ submitWith })
 .ai-panel { display: flex; flex-direction: column; height: 100%; background: var(--bg-panel); }
 .ai-head { padding: 10px 12px; border-bottom: 1px solid var(--border); gap: 8px; }
 .ai-head .hint { margin-left: auto; font-size: 12px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-collapse { flex: none; padding: 3px 8px; font-size: 15px; line-height: 1; }
 .ai-log { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 .msg { display: flex; flex-direction: column; gap: 4px; }
 .msg-role { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
@@ -462,13 +468,13 @@ defineExpose({ submitWith })
 .msg-actions { display: flex; gap: 6px; margin-top: 2px; }
 .msg-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; font-size: 12px; }
 .msg-actions .ico { color: var(--accent); font-size: 13px; line-height: 1; }
-.ai-disabled { padding: 8px 12px; font-size: 12px; background: #fff7ed; border-top: 1px solid var(--border); }
+.ai-disabled { padding: 8px 12px; font-size: 12px; background: #fbf3e6; border-top: 1px solid var(--border); }
 .state-chip {
   display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px;
-  background: #f5f3ff; color: #5b21b6; border-top: 1px solid var(--border);
+  background: var(--accent-soft); color: var(--accent-strong); border-top: 1px solid var(--border);
 }
 .state-chip span { flex: 1; }
-.state-chip .x { padding: 1px 7px; color: #6b21a8; }
+.state-chip .x { padding: 1px 7px; color: var(--accent-strong); }
 
 .pick-btn {
   display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 12px;
@@ -488,7 +494,7 @@ defineExpose({ submitWith })
 .new-chat-btn .ico { font-size: 13px; line-height: 1; }
 .pick-chip {
   display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px;
-  background: #f5f3ff; color: #5b21b6; border-top: 1px solid var(--border);
+  background: var(--accent-soft); color: var(--accent-strong); border-top: 1px solid var(--border);
 }
 .pick-chip .pick-ico { color: var(--accent); }
 .pick-chip .pick-tag { font-family: var(--mono); font-size: 11.5px; color: var(--accent); white-space: nowrap; flex: none; }

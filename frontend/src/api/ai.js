@@ -1,3 +1,22 @@
+import http from './index'
+
+/**
+ * Fetch a document's "30-second read" summary.
+ *
+ * @param {string} path  workspace-relative doc path ('' for an unsaved doc)
+ * @param {string} html  current document HTML
+ * @param {{refresh?:boolean, peek?:boolean}} opts
+ *   - peek: only return a cached summary; never call the model
+ *   - refresh: regenerate even if a cached summary exists
+ * @returns {Promise<{summary:string, cached:boolean, missing?:boolean, ts?:string}>}
+ */
+export const getSummary = (path, html, { refresh = false, peek = false } = {}) =>
+  http.post(
+    '/ai/summary',
+    { path, html, refresh, peek },
+    { timeout: 120000 }
+  )
+
 /**
  * Stream an AI generation/edit over Server-Sent Events.
  *

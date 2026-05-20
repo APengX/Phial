@@ -81,6 +81,7 @@
     "newChatConfirm": "开始新对话？当前历史会被清空。",
     "dragHeight": "上下拖动调整输入框高度",
     "chatModeNotice": "Chat 模式：AI 只会回话，不会改文档。需要改文档请切回 Agent。",
+    "collapse": "收起助手栏",
     "ctxChip": "上下文",
     "ctxChipTip": "勾选要随消息发给 AI 的文件（绑定文件夹里的文件 + 工作区里的其它文档）",
     "ctxOpen": "管理上下文…"
@@ -184,6 +185,47 @@
       "cancel": "取消",
       "frameTitle": "Widget 预览"
     }
+  },
+  "nav": {
+    "files": "文件",
+    "outline": "大纲",
+    "graph": "图谱",
+    "openFull": "全屏查看图谱",
+    "outlineEmpty": "这篇文档还没有标题（h1–h3）。加几个小标题，大纲就会出现在这里。",
+    "graphHint": "文档之间的链接与上下文关联 · 拖拽节点、滚轮缩放、点节点打开文档",
+    "graphEmpty": "工作区里还没有可画成图谱的文档。",
+    "edgeLink": "文档内链接",
+    "edgeContext": "上下文关联",
+    "summary": "30 秒速读",
+    "summaryGen": "生成 AI 速读",
+    "summaryGenerating": "正在生成速读…",
+    "summaryRegen": "重新生成",
+    "summaryStale": "文档已改动，速读可能已过期",
+    "summaryHint": "由 AI 概括全文要点，结果会缓存；文档内容变了再点重新生成。",
+    "readMin": "约 {n} 分钟读完",
+    "statWords": "{n} 字",
+    "statSections": "{n} 章节",
+    "statTables": "{n} 表格",
+    "statWidgets": "{n} 交互组件",
+    "statImages": "{n} 图"
+  },
+  "autolink": {
+    "title": "自动链接",
+    "tip": "自动链接到相关文档",
+    "intro": "扫描这篇文档，把提到的词连到工作区里对应的文档。",
+    "scanning": "正在扫描…",
+    "empty": "没有找到可以链接的词。",
+    "exact": "精确",
+    "ai": "AI",
+    "selectAll": "全选",
+    "selected": "已选 {n} / {total}",
+    "apply": "添加链接",
+    "applying": "添加中…",
+    "applied": "已添加 {n} 个链接",
+    "scanAllBtn": "一键连接",
+    "scanAllTip": "扫描整个工作区并自动连接相关文档",
+    "scanAllIntro": "扫描整个工作区，把每篇文档里提到的词连到对应的文档（精确匹配标题）。",
+    "appliedAll": "已为 {docs} 篇文档添加 {n} 个链接"
   },
   "common": { "cancel": "取消", "confirm": "确定", "loading": "加载中…", "language": "语言" }
 }

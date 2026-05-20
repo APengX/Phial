@@ -23,7 +23,7 @@ const props = defineProps({
   // when true, clicking elements in the iframe allows editing their text content
   editMode: { type: Boolean, default: false }
 })
-const emit = defineEmits(['state', 'to-agent', 'event', 'ready', 'loaded', 'pick', 'pick-cancel', 'edit', 'edit-cancel'])
+const emit = defineEmits(['state', 'to-agent', 'event', 'ready', 'loaded', 'pick', 'pick-cancel', 'edit', 'edit-cancel', 'navigate'])
 
 const frame = ref(null)
 
@@ -45,6 +45,30 @@ const PHIAL_SHIM_CORE = `(function(){
     ready: function(){ send({type:'ready'}); },
     onData: function(cb){ window.__phialOnData = cb; }
   };
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+    // internal workspace-doc links: open via the host app, never in the iframe
+    var doc = t.closest('a[data-phial-doc]');
+    if (doc) {
+      e.preventDefault();
+      send({type:'navigate', href: doc.getAttribute('data-phial-doc')});
+      return;
+    }
+    // in-page anchors: scroll here. A bare '#id' link in a srcdoc iframe would
+    // otherwise resolve against the *parent* URL and navigate the iframe away.
+    var frag = t.closest('a[href^="#"]');
+    if (frag) {
+      e.preventDefault();
+      var id = '';
+      try { id = decodeURIComponent(frag.getAttribute('href').slice(1)); }
+      catch(_) { id = frag.getAttribute('href').slice(1); }
+      var el = id ? document.getElementById(id) : null;
+      if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+      else window.scrollTo({top:0, behavior:'smooth'});
+    }
+  }, true);
+
   window.addEventListener('message', function(e){
     var d = e.data;
     if (!d || !d.__phialHost) return;
@@ -57,6 +81,12 @@ const PHIAL_SHIM_CORE = `(function(){
       d.on ? _startPick() : _stopPick();
     } else if (d.type === 'editMode') {
       d.on ? _startEdit() : _stopEdit();
+    } else if (d.type === 'scrollTo') {
+      try {
+        var hs = document.querySelectorAll('h1,h2,h3');
+        var tgt = hs[d.index];
+        if (tgt) tgt.scrollIntoView({behavior:'smooth', block:'start'});
+      } catch(_){}
     }
   });
 
@@ -88,7 +118,7 @@ const PHIAL_SHIM_CORE = `(function(){
     _hover = el;
     _prevOutline = el.style.outline;
     _prevOffset = el.style.outlineOffset;
-    el.style.outline = '2px solid #6d28d9';
+    el.style.outline = '2px solid #d97757';
     el.style.outlineOffset = '1px';
   }
   function _unhighlight(){
@@ -178,7 +208,7 @@ const PHIAL_SHIM_CORE = `(function(){
     _editHover = el;
     _editPrevOutline = el.style.outline;
     _editPrevOffset = el.style.outlineOffset;
-    el.style.outline = '2px dashed #10b981';
+    el.style.outline = '2px dashed #788c5d';
     el.style.outlineOffset = '1px';
   }
   function _editUnhighlight(){
@@ -215,6 +245,29 @@ const PHIAL_SHIM_CORE = `(function(){
   }
 })();`
 const PHIAL_SHIM = '<script>' + PHIAL_SHIM_CORE + CLOSE_SCRIPT
+const DOC_LINK_STYLE = '<style>a[data-phial-doc]{cursor:pointer}</style>'
+
+/* Internal workspace-doc links (relative *.html, or `?path=` refs) would
+   otherwise navigate the sandboxed iframe itself — resolved against the app
+   origin, that lands on a blank page. Strip the href into data-phial-doc so
+   the shim can turn a click into a host-side 'navigate' instead. */
+function isInternalDocHref(href) {
+  const h = (href || '').trim()
+  if (!h || /^(https?:|mailto:|tel:|javascript:|data:|#)/i.test(h)) return false
+  if (/[?&]path=/.test(h)) return true
+  return /\.html?$/i.test(h.split(/[?#]/)[0])
+}
+
+function neutralizeDocLinks(html) {
+  return html.replace(/<a\b[^>]*>/gi, (tag) => {
+    const m = tag.match(/\bhref\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/i)
+    if (!m) return tag
+    let val = m[1]
+    if (val[0] === '"' || val[0] === "'") val = val.slice(1, -1)
+    if (!isInternalDocHref(val)) return tag
+    return tag.replace(m[0], `data-phial-doc="${val.replace(/"/g, '&quot;')}"`)
+  })
+}
 
 function buildCsp() {
   const ext = props.settings.allowExternal
@@ -237,9 +290,13 @@ function buildCsp() {
 }
 
 function withInjections(rawHtml) {
-  const head = `<meta http-equiv="Content-Security-Policy" content="${buildCsp()}">` +
-    (props.settings.allowScripts ? PHIAL_SHIM : '')
-  const src = rawHtml || '<!DOCTYPE html><html><head></head><body></body></html>'
+  // Pin the base URL to about:srcdoc so relative links / `#fragment` anchors
+  // resolve within the iframe instead of against the parent app URL — without
+  // this, a bare `#id` link navigates the iframe away to a blank page.
+  const head = '<base href="about:srcdoc">' +
+    `<meta http-equiv="Content-Security-Policy" content="${buildCsp()}">` +
+    (props.settings.allowScripts ? PHIAL_SHIM + DOC_LINK_STYLE : '')
+  const src = neutralizeDocLinks(rawHtml || '<!DOCTYPE html><html><head></head><body></body></html>')
   if (/<head[^>]*>/i.test(src)) {
     return src.replace(/<head[^>]*>/i, (m) => `${m}\n${head}`)
   }
@@ -282,6 +339,7 @@ function onMessage(e) {
   else if (d.type === 'pickCancel') emit('pick-cancel')
   else if (d.type === 'edit') emit('edit', d.data)
   else if (d.type === 'editCancel') emit('edit-cancel')
+  else if (d.type === 'navigate') emit('navigate', d.href)
 }
 
 function sendPickMode(on) {
@@ -300,6 +358,19 @@ function sendEditMode(on) {
   }
 }
 
+// Scroll the rendered doc to its Nth heading (h1/h2/h3, document order) — the
+// outline panel uses this. No-op when in-doc JS is off (the shim isn't there).
+function scrollToHeading(index) {
+  try {
+    frame.value?.contentWindow?.postMessage(
+      { __phialHost: true, type: 'scrollTo', index },
+      '*'
+    )
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 onMounted(() => {
   window.addEventListener('message', onMessage)
   render()
@@ -310,7 +381,7 @@ watch(() => props.incomingData, (v) => { if (v != null) pushData(v) })
 watch(() => props.pickMode, sendPickMode)
 watch(() => props.editMode, sendEditMode)
 
-defineExpose({ pushData })
+defineExpose({ pushData, scrollToHeading })
 </script>
 
 <style scoped>

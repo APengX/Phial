@@ -29,6 +29,7 @@ from ..services import app_settings
 from ..services import attachments as attachments_mod
 from ..services import cli_agent
 from ..services import context_folder
+from ..services import doc_summary
 from ..services import media
 from ..services.agents import BUILTIN_ID
 from ..services.attachments import AttachmentsUnsupported
@@ -252,3 +253,65 @@ def chat():
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@ai_bp.route("/summary", methods=["POST"])
+def summary():
+    """Generate (or fetch the cached) "30-second read" summary for a document.
+
+    Body: {path?, html, refresh?, peek?}
+      - cache hit  -> returns the cached summary, no model call
+      - peek=true  -> never calls the model; returns missing=true on a miss
+      - refresh    -> regenerates even when a cached summary exists
+    """
+    data = request.get_json(silent=True) or {}
+    path = (data.get("path") or "").strip()
+    html = data.get("html") or data.get("currentHtml") or ""
+    refresh = bool(data.get("refresh"))
+    peek = bool(data.get("peek"))
+
+    if not html.strip():
+        return fail("文档为空，无法生成速读")
+
+    if path and not refresh:
+        cached = doc_summary.get_cached(path, html)
+        if cached:
+            return ok(cached)
+    if peek:
+        return ok({"summary": "", "cached": False, "missing": True})
+
+    title = Workspace._title_from_html(html) or (
+        path.rsplit("/", 1)[-1] if path else ""
+    )
+
+    agent_cfg = app_settings.get("agent") or {}
+    provider = agent_cfg.get("provider") or BUILTIN_ID
+    try:
+        if provider == BUILTIN_ID:
+            try:
+                client = LLMClient()
+            except LLMNotConfigured as exc:
+                return fail(str(exc), 503)
+            raw = client.chat(doc_summary.build_messages(html, title), max_tokens=400)
+        else:
+            try:
+                cli_agent.ensure_available(provider)
+            except CliAgentError as exc:
+                return fail(str(exc), 503)
+            raw = cli_agent.run(
+                provider,
+                doc_summary.build_prompt(html, title),
+                model=agent_cfg.get("model") or "",
+                env_extra=agent_cfg.get("env") or {},
+            )
+    except CliAgentError as exc:
+        logger.warning("summary CLI agent failed: %s", exc)
+        return fail(str(exc), 502)
+    except Exception:  # noqa: BLE001
+        logger.exception("summary generation failed")
+        return fail("速读生成失败，请查看后端日志", 502)
+
+    text = (raw or "").strip()
+    if not text:
+        return fail("模型没有返回内容", 502)
+    return ok(doc_summary.store(path, html, text))

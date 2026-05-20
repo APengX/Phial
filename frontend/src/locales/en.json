@@ -81,6 +81,7 @@
     "newChatConfirm": "Start a new chat? The current history will be cleared.",
     "dragHeight": "Drag up/down to resize the input",
     "chatModeNotice": "Chat mode: the AI will only reply with text and won't touch the document. Switch back to Agent to edit.",
+    "collapse": "Collapse AI panel",
     "ctxChip": "Context",
     "ctxChipTip": "Pick the files to send with your next message (files inside bound folders + other workspace docs)",
     "ctxOpen": "Manage context…"
@@ -184,6 +185,47 @@
       "cancel": "Cancel",
       "frameTitle": "Widget preview"
     }
+  },
+  "nav": {
+    "files": "Files",
+    "outline": "Outline",
+    "graph": "Graph",
+    "openFull": "Open full graph",
+    "outlineEmpty": "This document has no headings (h1–h3) yet. Add a few and the outline will show up here.",
+    "graphHint": "Links and context relations between documents · drag nodes, scroll to zoom, click to open",
+    "graphEmpty": "No documents in this workspace to graph yet.",
+    "edgeLink": "In-document link",
+    "edgeContext": "Context relation",
+    "summary": "30-second read",
+    "summaryGen": "Generate AI summary",
+    "summaryGenerating": "Generating summary…",
+    "summaryRegen": "Regenerate",
+    "summaryStale": "Document changed — summary may be out of date",
+    "summaryHint": "AI-generated gist of the whole document; the result is cached — regenerate after edits.",
+    "readMin": "~{n} min read",
+    "statWords": "{n} words",
+    "statSections": "{n} sections",
+    "statTables": "{n} tables",
+    "statWidgets": "{n} interactive",
+    "statImages": "{n} images"
+  },
+  "autolink": {
+    "title": "Auto-link",
+    "tip": "Auto-link to related documents",
+    "intro": "Scan this document and link mentioned terms to their documents in the workspace.",
+    "scanning": "Scanning…",
+    "empty": "No linkable terms found.",
+    "exact": "Exact",
+    "ai": "AI",
+    "selectAll": "Select all",
+    "selected": "{n} / {total} selected",
+    "apply": "Add links",
+    "applying": "Adding…",
+    "applied": "Added {n} link(s)",
+    "scanAllBtn": "Link all",
+    "scanAllTip": "Scan the whole workspace and auto-link related documents",
+    "scanAllIntro": "Scan the whole workspace and link mentioned terms to their documents (exact title match).",
+    "appliedAll": "Added {n} link(s) across {docs} document(s)"
   },
   "common": { "cancel": "Cancel", "confirm": "OK", "loading": "Loading…", "language": "Language" }
 }

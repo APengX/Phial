@@ -77,8 +77,8 @@ function run(cmd) {
   letter-spacing: -.5px;
 }
 .tt-btn:hover { background: var(--accent-soft, #f3f4f6); }
-.tt-btn.danger { color: #b91c1c; }
-.tt-btn.danger:hover { background: #fee2e2; }
+.tt-btn.danger { color: var(--danger); }
+.tt-btn.danger:hover { background: #f7eae8; }
 .tt-sep {
   width: 1px;
   height: 14px;

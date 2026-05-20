@@ -207,22 +207,22 @@ async function save() {
 .m-body section { margin-bottom: 18px; }
 .m-body h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin: 0 0 8px; }
 .hint { font-size: 12px; margin: -2px 0 8px; }
-.m-error { background: #fef2f2; color: #b91c1c; padding: 7px 10px; border-radius: 7px; font-size: 13px; margin: 0 0 12px; }
+.m-error { background: #f7eae8; color: var(--danger); padding: 7px 10px; border-radius: 7px; font-size: 13px; margin: 0 0 12px; }
 
 .prov {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 8px; margin-bottom: 7px; cursor: pointer; flex-wrap: wrap;
 }
-.prov.active { border-color: var(--accent); background: #faf5ff; }
+.prov.active { border-color: var(--accent); background: var(--accent-soft); }
 .p-name { font-weight: 500; }
 .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; }
-.badge.ok { background: #ecfdf5; color: #047857; }
-.badge.warn { background: #fffbeb; color: #b45309; }
+.badge.ok { background: rgba(120, 140, 93, 0.16); color: var(--success); }
+.badge.warn { background: rgba(199, 142, 63, 0.16); color: var(--warning); }
 .ver { font-size: 11px; color: var(--text-dim); }
 .ver.path { font-family: var(--mono); }
 
 .warnbox {
-  background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 8px 10px; border-radius: 7px;
+  background: rgba(199, 142, 63, 0.12); border: 1px solid var(--warning); color: #8a6122; padding: 8px 10px; border-radius: 7px;
   font-size: 12.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
 }
 .warnbox a { margin-left: auto; }

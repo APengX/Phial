@@ -39,6 +39,7 @@
           :title="(agent.label || t('settings.open'))"
           @click="settingsOpen = true"
         >⚙</button>
+        <button class="ghost icon-btn" @click="autoLinkOpen = true" :title="t('autolink.tip')">🔗</button>
         <button class="ghost" @click="rename">{{ t('editor.rename') }}</button>
         <button class="danger" @click="del">{{ t('editor.delete') }}</button>
         <button class="primary" :disabled="!dirty || saving" @click="save">
@@ -59,6 +60,12 @@
 
     <SettingsModal v-model="settingsOpen" @saved="onAgentSaved" />
     <ContextPicker v-model="ctxOpen" :path="currentPath" @changed="onCtxChanged" />
+    <AutoLinkModal
+      v-model="autoLinkOpen"
+      :path="currentPath"
+      :html="editorHtml"
+      @applied="onAutoLinked"
+    />
 
     <!-- Edit element modal -->
     <div v-if="editingElement" class="modal-overlay" @click.self="cancelEdit">
@@ -82,17 +89,42 @@
     </div>
 
     <div class="body">
-      <!-- file tree -->
-      <aside v-show="showTree" class="sidebar scroll">
-        <FileTree
-          :nodes="tree?.children || []"
-          :active-path="currentPath"
-          :open-set="openSet"
-          @select="selectDoc"
-          @toggle="toggleFolder"
-          @delete="deleteFromTree"
-          @rename="renameFromTree"
-        />
+      <!-- left rail: files / outline / graph -->
+      <aside v-show="showTree" class="sidebar">
+        <div class="side-tabs">
+          <button :class="{ active: sideTab === 'files' }" @click="sideTab = 'files'">
+            {{ t('nav.files') }}
+          </button>
+          <button :class="{ active: sideTab === 'outline' }" @click="sideTab = 'outline'">
+            {{ t('nav.outline') }}
+          </button>
+          <button :class="{ active: sideTab === 'graph' }" @click="sideTab = 'graph'">
+            {{ t('nav.graph') }}
+          </button>
+        </div>
+
+        <div v-show="sideTab === 'files'" class="side-body scroll">
+          <FileTree
+            :nodes="tree?.children || []"
+            :active-path="currentPath"
+            :open-set="openSet"
+            @select="selectDoc"
+            @toggle="toggleFolder"
+            @delete="deleteFromTree"
+            @rename="renameFromTree"
+          />
+        </div>
+
+        <div v-show="sideTab === 'outline'" class="side-body scroll">
+          <DocOutline :html="editorHtml" @jump="jumpToHeading" />
+        </div>
+
+        <div v-if="sideTab === 'graph'" class="side-body side-graph">
+          <GraphCanvas :active-path="currentPath" :legend="false" @open="selectDoc" />
+          <button class="ghost expand-graph" @click="router.push({ name: 'graph' })">
+            ⤢ {{ t('nav.openFull') }}
+          </button>
+        </div>
       </aside>
 
       <!-- center: source / preview / split -->
@@ -101,7 +133,9 @@
           <HtmlEditor v-model="editorHtml" @save="save" />
         </div>
         <div v-show="viewMode === 'preview' || viewMode === 'split'" class="pane preview-pane" :class="{ half: viewMode === 'split' }">
+          <DocSummary :html="editorHtml" :path="currentPath" />
           <SandboxPreview
+            ref="previewRef"
             :html="editorHtml"
             :settings="render"
             :pick-mode="pickMode"
@@ -113,6 +147,7 @@
             @pick-cancel="pickMode = false"
             @edit="onEdit"
             @edit-cancel="editMode = false"
+            @navigate="onPreviewNavigate"
           />
         </div>
       </main>
@@ -135,6 +170,7 @@
           @toggle-pick="togglePick"
           @clear-picked="pickedElement = null"
           @open-context="ctxOpen = true"
+          @collapse="showAi = false"
         />
       </aside>
     </div>
@@ -156,6 +192,10 @@ import SandboxPreview from '@/components/SandboxPreview.vue'
 import AiPanel from '@/components/AiPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import ContextPicker from '@/components/ContextPicker.vue'
+import DocSummary from '@/components/DocSummary.vue'
+import DocOutline from '@/components/DocOutline.vue'
+import GraphCanvas from '@/components/GraphCanvas.vue'
+import AutoLinkModal from '@/components/AutoLinkModal.vue'
 import { getDocument, saveDocument, getTree, deleteDocument, renameDocument } from '@/api/documents'
 import { getWorkspace, setRenderSettings } from '@/api/workspace'
 import { getContextPicks } from '@/api/context'
@@ -180,6 +220,8 @@ const editMode = ref(false)      // edit mode: click elements in preview to edit
 const editingElement = ref(null) // element being edited { selector, text, tagName }
 const editTextarea = ref(null)
 const aiPanelRef = ref(null)
+const previewRef = ref(null)
+const sideTab = ref('files')   // files | outline | graph
 
 const tree = ref(null)
 const openSet = ref(new Set())
@@ -187,6 +229,7 @@ const render = ref({ allowScripts: true, allowExternal: false })
 const agent = ref({ label: '', ready: true })
 const settingsOpen = ref(false)
 const ctxOpen = ref(false)
+const autoLinkOpen = ref(false)
 const ctxCount = ref(0)   // total picked files for the current doc (chip badge)
 
 // resizable AI panel
@@ -273,6 +316,12 @@ function countPicks(picks) {
 
 function onCtxChanged(picks) {
   ctxCount.value = countPicks(picks)
+}
+
+// Auto-link inserted links into the document — adopt the new HTML, leave it
+// dirty so the user reviews and saves.
+function onAutoLinked(html) {
+  editorHtml.value = html
 }
 
 async function save() {
@@ -374,6 +423,40 @@ async function renameFromTree(node) {
 
 function openInBrowser() {
   window.open('/api/documents/raw?path=' + encodeURIComponent(currentPath.value), '_blank')
+}
+
+// Outline panel -> scroll the preview to that heading. Needs the preview
+// visible; from pure source view, fall back to split.
+function jumpToHeading(index) {
+  if (viewMode.value === 'source') viewMode.value = 'split'
+  nextTick(() => previewRef.value?.scrollToHeading(index))
+}
+
+// A link inside the rendered doc that points at another workspace document —
+// resolve it relative to the current doc and open that doc in the editor.
+function onPreviewNavigate(href) {
+  const target = resolveDocHref(href, currentPath.value)
+  if (target) selectDoc(target)
+}
+
+// Mirror auto_link's relative hrefs (posixpath.relpath) and the `?path=` form.
+function resolveDocHref(href, fromPath) {
+  if (!href) return ''
+  let h = String(href).trim()
+  const m = h.match(/[?&]path=([^&]*)/)
+  if (m) {
+    try { return decodeURIComponent(m[1]) } catch { return m[1] }
+  }
+  h = h.split(/[?#]/)[0]
+  const parts = fromPath.includes('/')
+    ? fromPath.slice(0, fromPath.lastIndexOf('/')).split('/')
+    : []
+  for (const seg of h.split('/')) {
+    if (!seg || seg === '.') continue
+    if (seg === '..') parts.pop()
+    else parts.push(seg)
+  }
+  return parts.join('/')
 }
 
 // AI result lands straight in the editor (dirty, not saved — review & Cmd+S).
@@ -519,7 +602,7 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border); background: var(--bg-panel); flex-wrap: nowrap;
 }
 .icon-btn { padding: 5px 9px; }
-.icon-btn.agent-warn { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.icon-btn.agent-warn { color: #8a6122; border-color: var(--warning); background: rgba(199, 142, 63, 0.12); }
 .doc-id { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
 .doc-id code { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dirty { font-size: 11.5px; color: var(--text-dim); white-space: nowrap; }
@@ -538,11 +621,33 @@ onBeforeUnmount(() => {
 .toggle { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-dim); user-select: none; }
 
 .body { flex: 1; display: flex; min-height: 0; }
-.sidebar { width: 230px; min-width: 230px; border-right: 1px solid var(--border); background: var(--bg); }
+.sidebar {
+  width: 240px; min-width: 240px; border-right: 1px solid var(--border);
+  background: var(--bg); display: flex; flex-direction: column; min-height: 0;
+}
+.side-tabs { display: flex; border-bottom: 1px solid var(--border); flex: none; }
+.side-tabs button {
+  flex: 1; border: 0; border-radius: 0; padding: 7px 4px; font-size: 12.5px;
+  background: var(--bg); color: var(--text-dim);
+}
+.side-tabs button + button { border-left: 1px solid var(--border); }
+.side-tabs button.active {
+  background: var(--bg-panel); color: var(--accent); font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.side-body { flex: 1; min-height: 0; }
+.side-graph { display: flex; flex-direction: column; position: relative; }
+.side-graph > .graph-wrap { flex: 1; min-height: 0; }
+.expand-graph {
+  flex: none; margin: 6px; font-size: 12px;
+  border: 1px solid var(--border); color: var(--text-dim);
+}
 .center { flex: 1; display: flex; min-width: 0; }
 .pane { min-width: 0; height: 100%; }
 .editor-pane { flex: 1; border-right: 1px solid var(--border); }
 .preview-pane { flex: 1; display: flex; flex-direction: column; background: #fff; }
+/* DocSummary sits above the iframe; the iframe takes the rest of the column. */
+.preview-pane :deep(.sandbox-frame) { flex: 1; min-height: 0; height: auto; }
 .pane.half { flex: 1 1 50%; width: 50%; }
 .blocks-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg, #fff); min-width: 0; }
 .ai-side { width: 380px; min-width: 380px; border-left: 1px solid var(--border); position: relative; }

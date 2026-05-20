@@ -159,6 +159,6 @@ input[type="checkbox"] { flex: none; margin: 0; cursor: pointer; }
 .size, .count { font-size: 11px; white-space: nowrap; flex: none; }
 .kind-tag {
   font-size: 10px; padding: 0 5px; border-radius: 999px;
-  background: #fef3c7; color: #92400e; letter-spacing: 0.03em; flex: none;
+  background: rgba(199, 142, 63, 0.16); color: #8a6122; letter-spacing: 0.03em; flex: none;
 }
 </style>

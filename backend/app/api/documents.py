@@ -15,6 +15,10 @@ import io
 from flask import Response, request
 
 from . import documents_bp
+from ..services import app_settings, auto_link, cli_agent, doc_graph
+from ..services.agents import BUILTIN_ID
+from ..services.cli_agent import CliAgentError
+from ..services.llm_client import LLMClient, LLMNotConfigured
 from ..services.media import MediaError, to_html_doc, to_pdf_placeholder_doc
 from ..services.workspace import Workspace, WorkspaceError
 from ..utils.logger import get_logger
@@ -49,6 +53,140 @@ def list_docs():
         return ok({"documents": Workspace.list_docs()})
     except WorkspaceError as exc:
         return fail(str(exc))
+
+
+@documents_bp.route("/graph", methods=["GET"])
+def graph():
+    """Document relationship graph (nodes = docs, edges = links + context)."""
+    try:
+        return ok(doc_graph.build())
+    except WorkspaceError as exc:
+        return fail(str(exc))
+
+
+def _auto_link_ai(html: str, targets: list) -> list:
+    """Run the AI fuzzy-match pass through whichever provider is active.
+
+    Best-effort: any provider failure returns [] so the exact-match pass still
+    yields candidates."""
+    agent_cfg = app_settings.get("agent") or {}
+    provider = agent_cfg.get("provider") or BUILTIN_ID
+    try:
+        if provider == BUILTIN_ID:
+            try:
+                client = LLMClient()
+            except LLMNotConfigured:
+                return []
+            raw = client.chat(auto_link.build_messages(html, targets), max_tokens=1500)
+        else:
+            try:
+                cli_agent.ensure_available(provider)
+            except CliAgentError:
+                return []
+            raw = cli_agent.run(
+                provider,
+                auto_link.build_prompt(html, targets),
+                model=agent_cfg.get("model") or "",
+                env_extra=agent_cfg.get("env") or {},
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("auto-link AI pass failed (non-fatal)")
+        return []
+    return auto_link.parse_ai(raw, html, targets)
+
+
+@documents_bp.route("/auto-link/scan", methods=["POST"])
+def auto_link_scan():
+    """Find words in a document that name other workspace documents.
+
+    Body: {path, html}. Returns {candidates:[{id,phrase,target,title,kind,
+    snippet}], aiUsed}. Exact title matches first, then an AI fuzzy pass over
+    whatever wasn't matched."""
+    data = _body()
+    path = (data.get("path") or "").strip()
+    html = data.get("html") or ""
+    if not html.strip():
+        return fail("文档为空，无法扫描")
+    try:
+        targets = auto_link.collect_targets(path)
+    except WorkspaceError as exc:
+        return fail(str(exc))
+    if not targets:
+        return ok({"candidates": [], "aiUsed": False})
+
+    exact = auto_link.exact_candidates(html, targets)
+    linked = {c["target"] for c in exact}
+    remaining = [t for t in targets if t["path"] not in linked]
+    ai = _auto_link_ai(html, remaining) if remaining else []
+
+    candidates = exact + ai
+    for i, c in enumerate(candidates):
+        c["id"] = i
+    return ok({"candidates": candidates, "aiUsed": bool(remaining)})
+
+
+@documents_bp.route("/auto-link/apply", methods=["POST"])
+def auto_link_apply():
+    """Wrap the chosen phrases in links. Body: {path, html, picks:[{phrase,
+    target}]}. Returns {html, applied}."""
+    data = _body()
+    path = (data.get("path") or "").strip()
+    html = data.get("html") or ""
+    picks = data.get("picks") or []
+    if not html.strip():
+        return fail("文档为空")
+    if not isinstance(picks, list) or not picks:
+        return fail("没有选择要添加的链接")
+    new_html, applied = auto_link.apply_links(path, html, picks)
+    return ok({"html": new_html, "applied": applied})
+
+
+@documents_bp.route("/auto-link/scan-all", methods=["POST"])
+def auto_link_scan_all():
+    """Workspace-wide auto-link: exact-title matches across every document.
+
+    Returns {groups:[{path,title,candidates:[...]}]}. Exact-only — instant, no
+    model calls."""
+    try:
+        groups = auto_link.scan_workspace()
+    except WorkspaceError as exc:
+        return fail(str(exc))
+    return ok({"groups": groups})
+
+
+@documents_bp.route("/auto-link/apply-all", methods=["POST"])
+def auto_link_apply_all():
+    """Apply chosen links across multiple documents and save each to disk.
+
+    Body: {groups:[{path, picks:[{phrase,target}]}]}. Returns {applied, docs}."""
+    groups = _body().get("groups") or []
+    if not isinstance(groups, list) or not groups:
+        return fail("没有选择要添加的链接")
+    total = 0
+    docs_changed = 0
+    for g in groups:
+        if not isinstance(g, dict):
+            continue
+        path = (g.get("path") or "").strip()
+        picks = g.get("picks") or []
+        if not path or not isinstance(picks, list) or not picks:
+            continue
+        try:
+            html = Workspace.read_doc(path)["html"]
+        except WorkspaceError:
+            logger.warning("auto-link apply-all: skipping missing doc %s", path)
+            continue
+        new_html, applied = auto_link.apply_links(path, html, picks)
+        if applied:
+            try:
+                Workspace.write_doc(path, new_html)
+            except WorkspaceError as exc:
+                logger.warning("auto-link apply-all: write failed %s: %s", path, exc)
+                continue
+            total += applied
+            docs_changed += 1
+    logger.info("auto-link apply-all: %d links across %d docs", total, docs_changed)
+    return ok({"applied": total, "docs": docs_changed})
 
 
 @documents_bp.route("/content", methods=["GET"])

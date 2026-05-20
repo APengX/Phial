@@ -9,6 +9,16 @@ export const renameDocument = (src, dst) => http.post('/documents/rename', { src
 export const deleteDocument = (path) => http.delete('/documents', { params: { path } })
 export const makeDir = (path) => http.post('/documents/mkdir', { path })
 
+// Auto-link: scan for / apply links to other workspace documents.
+export const autoLinkScan = (path, html) =>
+  http.post('/documents/auto-link/scan', { path, html })
+export const autoLinkApply = (path, html, picks) =>
+  http.post('/documents/auto-link/apply', { path, html, picks })
+// Workspace-wide: scan / apply across every document.
+export const autoLinkScanAll = () => http.post('/documents/auto-link/scan-all', {})
+export const autoLinkApplyAll = (groups) =>
+  http.post('/documents/auto-link/apply-all', { groups })
+
 export function uploadDocument(file, { dir } = {}) {
   const fd = new FormData()
   fd.append('file', file, file.name)

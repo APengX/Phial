@@ -132,8 +132,8 @@ function onTurnInto(opt) {
 }
 .blk-row:hover { background: var(--accent-soft, #f3f4f6); }
 .blk-row.has-sub { padding-right: 16px; }
-.blk-row.danger { color: #b91c1c; }
-.blk-row.danger:hover { background: #fee2e2; }
+.blk-row.danger { color: var(--danger); }
+.blk-row.danger:hover { background: #f7eae8; }
 .blk-row .ic {
   width: 18px;
   text-align: center;

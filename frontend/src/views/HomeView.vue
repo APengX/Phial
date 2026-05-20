@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="row">
+        <button class="ghost" :title="t('nav.graphHint')" @click="router.push({ name: 'graph' })">🕸 {{ t('nav.graph') }}</button>
         <button class="ghost" :title="t('settings.open')" @click="settingsOpen = true">⚙ {{ t('settings.open') }}</button>
         <select v-model="locale" class="lang" :title="t('common.language')">
           <option value="zh">中文</option>
@@ -71,22 +72,24 @@
       <p v-if="!loading && docs.length === 0" class="muted empty">{{ t('home.noDocs') }}</p>
       <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
       <ul class="doc-list">
-        <li v-for="d in docs" :key="d.path" class="doc-li" :class="{ expanded: ctxOpen === d.path }">
+        <li v-for="d in docs" :key="d.path" class="doc-card" :class="{ expanded: ctxOpen === d.path }">
           <div class="doc-row" @click="open(d.path)">
-            <span class="d-icon">📄</span>
-            <span class="d-title">{{ d.title || d.name }}</span>
-            <span class="d-path muted">{{ d.path }}</span>
+            <div class="d-avatar" aria-hidden="true">{{ initials(d.title || d.name) }}</div>
+            <div class="d-titles">
+              <p class="d-title">{{ d.title || d.name }}</p>
+              <p class="d-sub muted">{{ d.path }} · {{ fmtTime(d.mtime) }}</p>
+            </div>
             <span class="d-acts">
-              <button
-                class="d-act ctx-btn"
-                :class="{ active: ctxOpen === d.path, has: (ctxFolders[d.path] || []).length > 0 }"
-                :title="t('home.contextFolders')"
-                @click.stop="toggleCtx(d.path)"
-              >📁<span v-if="(ctxFolders[d.path] || []).length" class="ctx-n">{{ ctxFolders[d.path].length }}</span></button>
               <button class="d-act" :title="t('editor.rename')" @click.stop="renameDoc(d)">✎</button>
               <button class="d-act danger" :title="t('editor.delete')" @click.stop="removeDoc(d)">🗑</button>
             </span>
-            <span class="d-time muted">{{ fmtTime(d.mtime) }}</span>
+            <button
+              class="d-act ctx-btn"
+              :class="{ active: ctxOpen === d.path, has: (ctxFolders[d.path] || []).length > 0 }"
+              :title="t('home.contextFolders')"
+              @click.stop="toggleCtx(d.path)"
+            >📁<span v-if="(ctxFolders[d.path] || []).length" class="ctx-n">{{ ctxFolders[d.path].length }}</span></button>
+            <button class="ghost d-open" @click.stop="open(d.path)">{{ t('home.open') }}</button>
           </div>
           <div v-if="ctxOpen === d.path" class="ctx-panel" @click.stop>
             <div class="ctx-head muted">{{ t('home.contextHint') }}</div>
@@ -346,6 +349,18 @@ function open(path) {
   router.push({ name: 'editor', query: { path } })
 }
 
+// Two-letter monogram for a document avatar — initials of the first two
+// words for latin titles, or the first two characters for CJK / single words.
+function initials(name) {
+  const s = (name || '').replace(/\.html?$/i, '').trim()
+  if (!s) return '·'
+  const words = s.split(/[\s/_-]+/).filter(Boolean)
+  if (words.length >= 2 && /[A-Za-z]/.test(s)) {
+    return (words[0][0] + words[1][0]).toUpperCase()
+  }
+  return s.slice(0, 2).toUpperCase()
+}
+
 function fmtTime(iso) {
   if (!iso) return ''
   try {
@@ -363,9 +378,9 @@ onMounted(load)
 .hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .brand { display: flex; gap: 14px; align-items: center; }
 .logo { width: 46px; height: 46px; border-radius: 11px; display: block; }
-h1 { margin: 0; font-size: 24px; }
+h1 { margin: 0; font-size: 26px; }
 .hero p { margin: 2px 0 0; font-size: 13px; }
-.lang { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); }
+.lang { padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); }
 
 .ws-bar {
   margin-top: 24px; padding: 12px 14px; background: var(--bg-panel); border: 1px solid var(--border);
@@ -380,55 +395,76 @@ h1 { margin: 0; font-size: 24px; }
   padding: 4px 11px; border-color: var(--border); background: var(--bg-panel);
 }
 .agent-status .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
-.agent-status.ok { color: #047857; }
-.agent-status.warn { color: #b45309; }
+.agent-status.ok { color: var(--success); }
+.agent-status.warn { color: var(--warning); }
 .agent-status:hover { background: var(--bg-soft); }
 
 .new-doc { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
 .hidden-input { display: none; }
 .upload-btn { white-space: nowrap; }
 
-.examples { margin-top: 32px; }
-.examples h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-.ex-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.ex-card {
-  border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel);
-  padding: 14px; display: flex; flex-direction: column; gap: 7px;
+/* Section labels — Acme uses mono for small labels. */
+.examples h2, .docs h2 {
+  font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px;
 }
-.ex-title { font-weight: 600; }
+
+.examples { margin-top: 32px; }
+.ex-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.ex-card {
+  border: 1.5px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--bg-panel);
+  padding: 16px; display: flex; flex-direction: column; gap: 7px;
+  transition: box-shadow 0.15s ease;
+}
+.ex-card:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ex-title { font-family: var(--serif); font-size: 16px; font-weight: 500; }
 .ex-desc { font-size: 12.5px; line-height: 1.55; flex: 1; }
 .ex-btn { align-self: flex-start; margin-top: 4px; }
 
 .docs { margin-top: 32px; }
-.docs h2 { font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
 .empty { padding: 24px 0; }
 .doc-list { list-style: none; margin: 0; padding: 0; }
-.doc-li {
-  border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px;
+/* Acme outlined card, horizontal layout — "best for: compact row lists". */
+.doc-card {
+  border: 1.5px solid var(--border-strong); border-radius: var(--radius-lg); margin-bottom: 10px;
   background: var(--bg-panel); overflow: hidden;
+  transition: outline-color 0.12s ease;
 }
-.doc-li.expanded { border-color: var(--accent); background: #faf5ff; }
+.doc-card:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+.doc-card.expanded { outline: 2px solid var(--accent); outline-offset: 2px; }
 .doc-row {
-  display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer;
 }
-.doc-li:hover { border-color: var(--accent); background: #faf5ff; }
-.d-icon { font-size: 15px; flex: none; }
-.d-title { font-weight: 500; flex: none; }
-.d-path { font-family: var(--mono); font-size: 11.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.d-acts { margin-left: auto; display: flex; gap: 2px; flex: none; opacity: 0; }
-.doc-li:hover .d-acts, .doc-li.expanded .d-acts { opacity: 1; }
+.d-avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--oat);
+  flex: none; display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: 0.02em;
+}
+.d-titles { flex: 1; min-width: 0; }
+.d-title {
+  font-family: var(--serif); font-size: 16px; font-weight: 500; line-height: 1.3;
+  margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.d-sub {
+  font-family: var(--mono); font-size: 11.5px; margin: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.d-acts { display: flex; gap: 2px; flex: none; opacity: 0; }
+.doc-card:hover .d-acts, .doc-card.expanded .d-acts { opacity: 1; }
 .d-act {
-  border: 0; background: transparent; padding: 2px 6px; font-size: 12px; line-height: 1;
-  border-radius: 5px; color: var(--text-dim);
+  border: 0; background: transparent; padding: 4px 7px; font-size: 12px; line-height: 1;
+  border-radius: 6px; color: var(--text-dim);
 }
 .d-act:hover { background: var(--bg-soft); color: var(--text); }
-.d-act.danger:hover { background: #fef2f2; color: var(--danger); }
-.d-time { font-size: 11.5px; white-space: nowrap; flex: none; }
+.d-act.danger:hover { background: #f7eae8; color: var(--danger); }
+.d-open {
+  flex: none; height: 30px; padding: 0 14px; font-size: 13px;
+  border: 1.5px solid var(--border-strong); border-radius: var(--radius);
+}
 
 /* Context-folders affordance: badge on the row, panel below when open. */
 .ctx-btn { display: inline-flex; align-items: center; gap: 3px; }
 .ctx-btn.has { color: var(--accent); opacity: 1; }
-.doc-li .ctx-btn.has { opacity: 1; }  /* always visible when folders are bound */
 .ctx-btn.active { background: var(--accent-soft); color: var(--accent); }
 .ctx-n {
   font-size: 10.5px; min-width: 14px; padding: 0 4px; border-radius: 999px;
@@ -437,8 +473,8 @@ h1 { margin: 0; font-size: 24px; }
 .ctx-btn.active .ctx-n, .ctx-btn:not(.has) .ctx-n { background: var(--text-dim); }
 
 .ctx-panel {
-  border-top: 1px dashed var(--border); padding: 10px 14px 12px;
-  background: rgba(124, 58, 237, 0.04);
+  border-top: 1px dashed var(--border-strong); padding: 10px 14px 12px;
+  background: rgba(217, 119, 87, 0.05);
 }
 .ctx-head { font-size: 11.5px; margin-bottom: 8px; line-height: 1.5; }
 .ctx-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -447,7 +483,7 @@ h1 { margin: 0; font-size: 24px; }
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px;
   font-size: 12.5px;
 }
-.ctx-list li.missing { border-color: #fca5a5; background: #fef2f2; }
+.ctx-list li.missing { border-color: var(--danger); background: #f7eae8; }
 .ctx-name { font-weight: 500; flex: none; }
 .ctx-meta { font-size: 11.5px; flex: none; }
 .ctx-path {
@@ -460,7 +496,7 @@ h1 { margin: 0; font-size: 24px; }
   font-size: 16px; line-height: 1; padding: 0 6px; border-radius: 4px;
   cursor: pointer; flex: none;
 }
-.ctx-rm:hover { background: #fef2f2; color: var(--danger); }
+.ctx-rm:hover { background: #f7eae8; color: var(--danger); }
 .ctx-empty { font-size: 12px; padding: 4px 0 8px; }
 .ctx-add { font-size: 12px; padding: 4px 10px; }
 </style>

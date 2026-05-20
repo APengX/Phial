@@ -77,7 +77,7 @@ AGENT_GUIDE_CONTENT = """# Phial 工作区 · 给 agent 看的说明书
    - 图标 / 图示用内联 SVG 或 emoji；
    - 不要 `fetch()` 外部地址，数据直接内联进 HTML（DOM 节点或 JS 数组）。
 4. **不要用 `window.prompt` / `alert` / `confirm`**——文档跑在跨源沙箱 iframe 里，浏览器会静默拦截（点了没反应）。需要输入就放页面内 `<input>` / `<textarea>` / `contenteditable`；需要确认就用页面内的按钮 / 二次点击。
-5. 中文文档默认用系统中文字体栈：`-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`。视觉上克制、可读、层级清晰，适配窄屏。
+5. 视觉风格见下面「默认视觉风格」一节；克制、可读、层级清晰，适配窄屏。
 
 ## 先判断：文档 还是 界面？
 
@@ -85,6 +85,17 @@ AGENT_GUIDE_CONTENT = """# Phial 工作区 · 给 agent 看的说明书
 - 用户的意图涉及**排序 / 拖动 / 筛选 / 勾选 / 选择 / 调参 / 对比方案 / 反复预览**（例：给 30 个 ticket 排优先级、调一个 system prompt、规划一周日程、给条目分类、对比候选）→ 产出**真正能用的界面**：可拖拽的卡片、可编辑的字段、实时预览、滑块、勾选框、分栏看板……让用户直接在里面操作，最后一键把结果带走。
 
 别只是把 Markdown 套一层 CSS 装成"可视化"——能拖就真的能拖、能编辑就真的能改、预览要实时刷新。
+
+## 默认视觉风格
+
+除非用户明确要别的风格，文档统一套 Phial 的**暖色、克制、editorial** 设计语言（和 Phial 应用界面一致；建议先在 `:root` 里把色值定义成 CSS 变量再引用）：
+
+- **配色**：页面背景象牙白 `#faf9f5`，卡片 / 面板纯白 `#ffffff`，柔和分区底 `#f0eee6`，填充色块用燕麦色 `#e3dacc`；正文 `#141413`，次要文字 `#3d3d3a`，更弱的元信息 `#87867f`，边框 / 卡片描边 `#d1cfc5`。
+- **强调色**：陶土橙 `#d97757`（更深的 `#b85c3e`），**只用在小处**——左边线、折叠三角、链接、关键数字，不大面积铺；语义色 成功 `#788c5d` / 警告 `#c78e3f` / 危险 `#b04a3f` / 信息 `#6a8caf`。**不要用冷蓝、纯黑、霓虹色或大面积渐变**。
+- **字体**：标题用衬线体 `Georgia, "Songti SC", "Source Han Serif SC", serif`（字重 500，`letter-spacing: -0.01em`）；正文用系统无衬线 `-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`；代码 / 小标签 / 元信息（时间、计数、路径）用等宽 `ui-monospace, "SF Mono", Menlo, monospace`。
+- **形状**：圆角 10–12px，胶囊标签 / 徽章 999px；卡片 / 折叠块用 `1.5px solid #d1cfc5` 描边、或柔和阴影 `0 4px 14px rgba(20,20,19,.08)`，二者不要叠加。
+- **结构**：正文型文档**开头放一个「30 秒速读」卡片**（陶土色左边线的浅色卡，两三句话点明「是什么 / 给谁看 / 看完能干嘛」）；正文段落限宽 ≤680px；多用 `<details>` 折叠、并排分栏、提示框承载层级；长文档加一条 sticky 侧边目录。
+- **气质**：留白充足，层级靠字号 / 字重 / 间距而非密集分割线；hover 强调用 `2px solid #d97757` outline。整体像一份精排的印刷品——温暖、安静、克制。
 
 ## `window.phial` —— 文档 ↔ 上游 AI 的两向桥
 
@@ -156,6 +167,7 @@ CLAUDE_MD_CONTENT = """# Phial 工作区 · Claude Code 指引
 3. 不要 `window.prompt` / `alert` / `confirm`——跨源 iframe 里被静默拦截。用页面内 `<input>` / 按钮代替。
 4. 调用 `window.phial`：状态变化时 `phial.setState(...)`，主按钮接 `phial.sendToAgent(summary, payload)`，可选地启动时 `phial.ready()`。
 5. 先判断该产"文档"还是"界面"——涉及排序 / 拖动 / 筛选 / 调参 / 对比时，做**真能操作**的界面，不是 Markdown 套层 CSS。
+6. 视觉上套 Phial 的**暖色 editorial 设计语言**：象牙白背景 `#faf9f5`、陶土橙强调色 `#d97757`、衬线标题 + 无衬线正文、12px 圆角卡片——完整色板与字体见 [`AGENTS.md`](./AGENTS.md) 的「默认视觉风格」一节。
 
 ## 修改既有文档
 
@@ -222,7 +234,7 @@ Before generating HTML, jot down (in your head or scratch):
 
    State and the `sendToAgent` payload are how the user's work flows back into the conversation. Design the interface so its meaningful output ends up in `state` — otherwise nothing flows back.
 6. **Don't fake the interactions**: if you advertise drag-to-reorder, drag must actually reorder; edits must actually persist into state; filters must actually filter; previews must refresh live. Use native HTML5 Drag-and-Drop / Pointer events — write the drag logic yourself, don't reach for a CDN library (which would be blocked anyway).
-7. Default Chinese font stack: `-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`. Restrained, readable, clear visual hierarchy, narrow-screen friendly.
+7. **Use Phial's default visual language** — a warm, restrained, editorial look that matches the Phial app itself. Ivory background `#faf9f5`, white cards `#ffffff`, clay-orange accent `#d97757` (deeper `#b85c3e`) used sparingly — left borders, markers, links, key numbers, never large fills; serif headings (`Georgia, "Songti SC", serif`, weight 500) over a sans body (`-apple-system, "PingFang SC", sans-serif`), monospace for small labels / metadata; 10–12px radius (999px pills); cards via a `1.5px solid #d1cfc5` border *or* a soft `0 4px 14px rgba(20,20,19,.08)` shadow. No cold blues, pure black, neon, or heavy gradients. See the "默认视觉风格" section in `AGENTS.md` for the full palette. Narrow-screen friendly.
 
 ## 5. Save into the workspace
 
