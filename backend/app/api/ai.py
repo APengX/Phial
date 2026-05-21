@@ -29,6 +29,7 @@ from ..services import app_settings
 from ..services import attachments as attachments_mod
 from ..services import cli_agent
 from ..services import context_folder
+from ..services import doc_source
 from ..services import doc_summary
 from ..services import media
 from ..services.agents import BUILTIN_ID
@@ -84,6 +85,31 @@ def _merge_bundle(bundle: str, extra: str) -> str:
     return bundle + "\n\n" + extra
 
 
+_HEAD_OPEN_RE = re.compile(r"<head[^>]*>", re.IGNORECASE)
+
+
+def _keep_pdf_src(result: dict, pdf_rel) -> dict:
+    """Re-stamp the `phial-pdf-src` meta onto a freshly generated document.
+
+    When the agent turns a PDF placeholder into real content it produces a
+    brand-new HTML doc that no longer carries the meta — which would sever
+    the link to the source PDF for every later chat / edit. This puts it
+    back so the document stays anchored to its original."""
+    if not pdf_rel:
+        return result
+    html = result.get("html") or ""
+    if not html or _PDF_SRC_RE.search(html):
+        return result
+    safe = str(pdf_rel).replace("&", "&amp;").replace('"', "&quot;")
+    meta = f'<meta name="phial-pdf-src" content="{safe}">'
+    m = _HEAD_OPEN_RE.search(html)
+    if m:
+        result["html"] = html[: m.end()] + "\n  " + meta + html[m.end():]
+    else:
+        result["html"] = meta + "\n" + html
+    return result
+
+
 @ai_bp.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -116,6 +142,17 @@ def chat():
         logger.exception("context bundle build failed (non-fatal)")
         context_bundle = ""
 
+    # In chat mode the document's full text is otherwise withheld. If the doc
+    # was created from an upload, feed its preserved original back in so the
+    # model interprets a picked element against the real source, not a guess.
+    source_text = ""
+    if mode == "chat" and path:
+        try:
+            source_text = doc_source.source_text_for(path)
+        except Exception:  # noqa: BLE001
+            logger.exception("doc source lookup failed (non-fatal)")
+            source_text = ""
+
     # PDF picks are routed to the provider's Files API when available;
     # otherwise we extract text and splice it into the bundle so the chat
     # still sees the document's contents.
@@ -131,20 +168,33 @@ def chat():
     # the inline file block, not text-extracted. Clear current_html so the
     # agent uses the CREATE template (the placeholder body isn't useful).
     doc_pdf_path = None
+    doc_pdf_rel = None  # set when the doc is linked to a still-present PDF
     m = _PDF_SRC_RE.search(current_html) if current_html else None
     if m:
         pdf_rel = m.group(1)
         logger.info("PDF placeholder detected: phial-pdf-src=%s", pdf_rel)
         try:
             doc_pdf_path = Workspace.resolve(pdf_rel, must_exist=True)
+            doc_pdf_rel = pdf_rel
             pdf_picks = [(doc_pdf_path, PurePosixPath(pdf_rel).stem)] + pdf_picks
             current_html = ""
             logger.info("PDF resolved: %s", doc_pdf_path)
         except WorkspaceError as exc:
             logger.warning("PDF source file missing (%s): %s — sending placeholder as text", pdf_rel, exc)
-    else:
-        if current_html:
-            logger.debug("no phial-pdf-src in current_html (len=%d)", len(current_html))
+    elif path:
+        # Existing docs that lost the meta (AI regenerated them before this
+        # fix, or they pre-date it): recover the link via the sibling PDF the
+        # native upload leaves next to the doc (same dir, same stem, .pdf).
+        # current_html is kept — these are real docs, not placeholders.
+        sibling = re.sub(r"\.html?$", ".pdf", path, flags=re.IGNORECASE)
+        if sibling != path:
+            try:
+                doc_pdf_path = Workspace.resolve(sibling, must_exist=True)
+                doc_pdf_rel = sibling
+                pdf_picks = [(doc_pdf_path, PurePosixPath(sibling).stem)] + pdf_picks
+                logger.info("recovered sibling PDF for %s: %s", path, sibling)
+            except WorkspaceError:
+                pass
 
     # Build a generator factory + a one-shot factory for the chosen provider.
     # Agent mode -> produce HTML edits; chat mode -> free-form text reply.
@@ -172,6 +222,7 @@ def chat():
                 prompt, current_html, history, path, interface_state, picked_element,
                 context_bundle=context_bundle,
                 attachments=attachments_blocks,
+                source_text=source_text,
             )
         else:
             messages = build_messages(
@@ -199,6 +250,7 @@ def chat():
             text_prompt = build_chat_prompt(
                 prompt, current_html, history, path, interface_state, picked_element,
                 context_bundle=context_bundle,
+                source_text=source_text,
             )
         else:
             text_prompt = build_prompt(
@@ -221,7 +273,7 @@ def chat():
             raw = make_oneshot()
             if mode == "chat":
                 return ok({"raw": raw, "mode": "chat", "text": raw})
-            return ok({"raw": raw, **finalize_html(raw, current_html)})
+            return ok({"raw": raw, **_keep_pdf_src(finalize_html(raw, current_html), doc_pdf_rel)})
         except CliAgentError as exc:
             logger.warning("CLI agent failed: %s", exc)
             return fail(str(exc), 502)
@@ -240,7 +292,7 @@ def chat():
             if mode == "chat":
                 yield _sse({"type": "done", "raw": raw, "mode": "chat", "text": raw})
             else:
-                yield _sse({"type": "done", "raw": raw, **finalize_html(raw, current_html)})
+                yield _sse({"type": "done", "raw": raw, **_keep_pdf_src(finalize_html(raw, current_html), doc_pdf_rel)})
         except CliAgentError as exc:
             logger.warning("CLI agent stream failed: %s", exc)
             yield _sse({"type": "error", "message": str(exc)})

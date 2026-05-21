@@ -140,6 +140,19 @@ _CHAT_PICKED_BLOCK = """[背景资料 · 用户在预览里选中的元素]
 (用户的问题大概率是围绕这段内容的——把它当成问题的**对象**。不要描述"你选了哪个元素 / 它的标签名 / CSS 选择器"——用户自己点的，自己知道。直接回答他们对这段内容问的那件事。)"""
 
 
+_SOURCE_SYSTEM_BLOCK = """[背景资料 · 当前文档的原始上传稿]
+
+下面是这篇文档**上传时的原始文件内容**。Phial 现在展示的 HTML 是它转换 / 重排后的版本，之后可能还被 AI 编辑过，和原稿会有出入。
+
+- 用户在预览里选中某段内容来问你时，**以这份原稿为准**去理解它的真实含义；不要只凭那段 HTML 片段臆测，也不要编造原稿里没有的东西。
+- 这份原稿覆盖了系统提示里"你没有这篇文档的全文"那句——你现在有原文了。
+- 这是只读背景：不要修改它、不要整段复述给用户，引用时点到具体片段即可。
+
+```
+{source}
+```"""
+
+
 _CONTEXT_SYSTEM_BLOCK = """[背景资料 · 用户绑定到当前文档的本地文件夹]
 
 下面是用户在 Phial 首页给这篇文档挂上的本地文件夹（通常是相关的代码 / 笔记 / 配置）。把它当成只读的对话背景：
@@ -172,6 +185,7 @@ def build_chat_messages(
     picked_element: Any = None,
     context_bundle: Optional[str] = None,
     attachments: Optional[List[dict]] = None,
+    source_text: Optional[str] = None,
 ) -> List[dict]:
     """Build messages for chat-mode replies: free-form text, no HTML edits.
 
@@ -189,6 +203,12 @@ def build_chat_messages(
         model tries to narrate back at the user.
     """
     messages: List[dict] = [{"role": "system", "content": _CHAT_SYSTEM_PROMPT}]
+
+    if source_text and source_text.strip():
+        messages.append({
+            "role": "system",
+            "content": _SOURCE_SYSTEM_BLOCK.format(source=source_text.strip()),
+        })
 
     if context_bundle and context_bundle.strip():
         messages.append({
@@ -232,10 +252,12 @@ def build_chat_prompt(
     interface_state: Any = None,
     picked_element: Any = None,
     context_bundle: Optional[str] = None,
+    source_text: Optional[str] = None,
 ) -> str:
     """Flatten chat messages into one prompt string for CLI agents."""
     msgs = build_chat_messages(
-        prompt, current_html, history, path, interface_state, picked_element, context_bundle
+        prompt, current_html, history, path, interface_state, picked_element,
+        context_bundle, source_text=source_text,
     )
     out: List[str] = []
     for m in msgs:

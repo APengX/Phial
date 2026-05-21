@@ -15,7 +15,7 @@ import io
 from flask import Response, request
 
 from . import documents_bp
-from ..services import app_settings, auto_link, cli_agent, doc_graph, doc_text
+from ..services import app_settings, auto_link, cli_agent, doc_graph, doc_source, doc_text
 from ..services.agents import BUILTIN_ID
 from ..services.cli_agent import CliAgentError
 from ..services.llm_client import LLMClient, LLMNotConfigured
@@ -258,7 +258,9 @@ def save_content():
 def rename_doc():
     data = _body()
     try:
-        return ok(Workspace.rename_doc(data.get("src", ""), data.get("dst", "")))
+        result = Workspace.rename_doc(data.get("src", ""), data.get("dst", ""))
+        doc_source.rename_source(data.get("src", ""), result["path"])
+        return ok(result)
     except WorkspaceError as exc:
         return fail(str(exc), 409 if "已存在" in str(exc) else 400)
 
@@ -269,6 +271,7 @@ def delete_doc():
     path = request.args.get("path", "") or _body().get("path", "")
     try:
         Workspace.delete_doc(path)
+        doc_source.remove_source(path)
         logger.info("deleted %s", path)
         return ok({"path": path})
     except WorkspaceError as exc:
@@ -349,6 +352,9 @@ def upload_doc():
     try:
         rel = Workspace.unique_doc_path(prefix + stem)
         doc = Workspace.create_doc(rel, html=html)
+        # Preserve the original upload as a sidecar so chat can interpret a
+        # picked element against what the document actually said.
+        doc_source.save_source(doc["path"], f.filename, raw, mime)
         logger.info("uploaded %s -> %s", f.filename, doc["path"])
         return ok(doc, 201)
     except WorkspaceError as exc:
